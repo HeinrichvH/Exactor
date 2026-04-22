@@ -34,7 +34,7 @@ intercept:
         config_yaml, tmp_path, monkeypatch, capsys,
     )
     assert code == 2
-    assert "failed" in out
+    assert "failed" in err
 
 
 def test_loose_mode_falls_back_on_failure(tmp_path, monkeypatch, capsys):
@@ -85,12 +85,12 @@ intercept:
   - tool: WebSearch
     route_to: echo
 """
-    code, out, _ = _run_hook(
+    code, out, err = _run_hook(
         {"tool_name": "WebSearch", "tool_input": {"query": "world"}},
         config_yaml, tmp_path, monkeypatch, capsys,
     )
     assert code == 2
-    assert "hello-world" in out
+    assert "hello-world" in err
 
 
 def test_cache_miss_then_hit(tmp_path, monkeypatch, capsys):
@@ -111,15 +111,15 @@ intercept:
     payload = {"tool_name": "WebSearch", "tool_input": {"query": "same"}}
 
     # First call: miss, run worker, store
-    code1, out1, _ = _run_hook(payload, config_yaml, tmp_path, monkeypatch, capsys)
+    code1, _, err1 = _run_hook(payload, config_yaml, tmp_path, monkeypatch, capsys)
     assert code1 == 2
-    assert "routed" in out1
+    assert "routed" in err1
     assert counter.read_text().count("1") == 1
 
     # Second call: hit, do NOT run worker
-    code2, out2, _ = _run_hook(payload, config_yaml, tmp_path, monkeypatch, capsys)
+    code2, _, err2 = _run_hook(payload, config_yaml, tmp_path, monkeypatch, capsys)
     assert code2 == 2
-    assert "cache hit" in out2
+    assert "cache hit" in err2
     assert counter.read_text().count("1") == 1  # unchanged
 
 

@@ -3,7 +3,7 @@ Hook dispatcher for Claude Code PreToolUse and PostToolUse events.
 
 Claude Code passes a JSON object on stdin. Exit codes:
   0 — allow the tool call to proceed
-  2 — block the tool call; stdout is shown to the model as feedback
+  2 — block the tool call; STDERR is shown to the model as feedback
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def pre_tool_use(config_path: Path | None = None) -> int:
         cache_key = make_key(rule.route_to, extract_query(rule, tool_input))
         hit = cache.get(cache_key)
         if hit is not None:
-            print(f"[exactor] cache hit for {rule.route_to} → returning stored result\n\n{hit}")
+            print(f"[exactor] cache hit for {rule.route_to} → returning stored result\n\n{hit}", file=sys.stderr)
             return 2
 
     # 2. Run the worker
@@ -61,15 +61,17 @@ def pre_tool_use(config_path: Path | None = None) -> int:
         cache.put(cache_key, result.output, ttl_seconds=ttl_hours * 3600)
 
     if result.success:
-        print(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}")
+        print(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}", file=sys.stderr)
         return 2
 
     # 4. Worker failed. Apply mode policy.
     if effective_mode(worker, config) == MODE_LOOSE:
-        print(f"[exactor] {result.output} — falling back to raw {tool_name}", file=sys.stderr)
+        # Loose fallback: log to a separate channel so it doesn't reach the model.
+        # Claude Code's hook log shows the warning; the model proceeds with raw tool.
+        sys.stderr.write(f"[exactor] {result.output} — falling back to raw {tool_name}\n")
         return 0
 
-    print(result.output)
+    print(result.output, file=sys.stderr)
     return 2
 
 
@@ -86,7 +88,10 @@ def post_tool_use(config_path: Path | None = None) -> int:
         lines = tool_output.splitlines()
         if len(lines) > max_lines:
             trimmed = "\n".join(lines[:max_lines])
-            print(f"[exactor] output trimmed to {max_lines} lines\n\n{trimmed}\n[... {len(lines) - max_lines} lines suppressed]")
+            print(
+                f"[exactor] output trimmed to {max_lines} lines\n\n{trimmed}\n[... {len(lines) - max_lines} lines suppressed]",
+                file=sys.stderr,
+            )
             return 2
 
     return 0
