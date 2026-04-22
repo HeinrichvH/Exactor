@@ -61,6 +61,7 @@ class Config:
     cache: CacheConfig = field(default_factory=CacheConfig)
     guards: dict = field(default_factory=dict)
     mode: str = MODE_STRICT            # default failure policy for all workers
+    source: Optional[Path] = None      # path to the loaded .exactor.yml (None if constructed in-memory)
 
 
 def load_config(path: Path) -> Config:
@@ -96,6 +97,7 @@ def load_config(path: Path) -> Config:
         cache=cache,
         guards=raw.get("guards") or {},
         mode=mode,
+        source=path,
     )
 
 

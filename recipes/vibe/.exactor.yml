@@ -1,8 +1,14 @@
 #
 # Exactor recipe: Mistral Vibe as a researcher worker.
 #
-# Assumes: `vibe` is on PATH, and you've provisioned ~/.vibe/agents/research.toml
-# and ~/.vibe/prompts/research.md (see README.md in this directory).
+# Self-contained: the agent + prompt live in vibe-home/ next to this file.
+# Exactor exposes EXACTOR_CONFIG_DIR = directory of this .exactor.yml, and
+# pointing VIBE_HOME there makes vibe read agents/ and prompts/ from the
+# recipe instead of ~/.vibe/. Editing vibe-home/prompts/research.md IS
+# editing the live prompt — no cp-to-home sync step.
+#
+# Requirements: `vibe` on PATH and MISTRAL_API_KEY in the environment
+# (or in ~/.vibe/.env, which vibe still reads globally).
 #
 
 version: 1
@@ -27,7 +33,7 @@ workers:
       - "text"
     stdin: devnull              # vibe blocks on an open fd 0 from non-TTY callers
     env:
-      VIBE_HOME: "${HOME}/.vibe"
+      VIBE_HOME: "${EXACTOR_CONFIG_DIR}/vibe-home"
     timeout: 240                # inner; set Claude Code hook timeout higher (e.g. 300)
     cache: true
 

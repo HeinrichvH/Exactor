@@ -131,6 +131,25 @@ def test_worker_env_var_expansion(monkeypatch):
     assert result.output == "opensesame-suffix"
 
 
+def test_worker_env_exposes_exactor_config_dir(tmp_path):
+    cfg_path = tmp_path / ".exactor.yml"
+    cfg_path.write_text("")  # existence only; we build Config manually below
+    config = Config(
+        workers={"w": Worker(
+            command="sh",
+            args=["-c", "echo $RECIPE_ROOT"],
+            env={"RECIPE_ROOT": "${EXACTOR_CONFIG_DIR}/vibe-home"},
+        )},
+        intercept=[InterceptRule(tool="WebSearch", route_to="w")],
+        memory=MemoryConfig(),
+        source=cfg_path,
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "x"}, config)
+    assert result.success
+    assert result.output == f"{tmp_path}/vibe-home"
+
+
 def test_worker_command_not_found_is_clean_failure():
     config = Config(
         workers={"w": Worker(command="this-does-not-exist", args=["{query}"])},

@@ -1,0 +1,8 @@
+# Vibe writes runtime state into VIBE_HOME. Only the hand-authored
+# agents/ and prompts/ belong in the repo; everything else is per-user.
+*
+!.gitignore
+!agents/
+!agents/**
+!prompts/
+!prompts/**

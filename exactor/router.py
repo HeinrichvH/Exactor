@@ -6,6 +6,7 @@ import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from string import Template
 from typing import Optional
 
 from .config import STDIN_DEVNULL, STDIN_INHERIT, Config, InterceptRule, Worker
@@ -57,14 +58,27 @@ def match_rule(tool_name: str, tool_input: dict, config: Config) -> Optional[Int
     return None
 
 
-def _build_env(worker: Worker) -> Optional[dict]:
-    """Overlay worker.env onto the host environment. ${VAR} values are
-    expanded from the host env at hook invocation time (not worker runtime)."""
-    if not worker.env:
-        return None
+def _build_env(worker: Worker, config: Config) -> Optional[dict]:
+    """Overlay worker.env onto the host environment.
+
+    Values are expanded at hook-invocation time via string.Template.safe_substitute,
+    which resolves ${VAR} against the host env plus two recipe-locals:
+
+      - EXACTOR_CONFIG_DIR — directory containing the loaded .exactor.yml
+      - EXACTOR_CONFIG_FILE — the .exactor.yml path itself
+
+    These let a recipe point a worker at resources colocated with the config
+    (e.g. `VIBE_HOME: "${EXACTOR_CONFIG_DIR}/vibe-home"`) without asking the
+    user to copy anything into their home directory.
+    """
     env = os.environ.copy()
+    if config.source is not None:
+        env["EXACTOR_CONFIG_DIR"] = str(config.source.parent)
+        env["EXACTOR_CONFIG_FILE"] = str(config.source)
+    if not worker.env:
+        return env if config.source is not None else None
     for k, v in worker.env.items():
-        env[k] = os.path.expandvars(str(v))
+        env[k] = Template(str(v)).safe_substitute(env)
     return env
 
 
@@ -103,7 +117,7 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
             text=True,
             stdin=_stdin_spec(worker.stdin),
             timeout=worker.timeout,
-            env=_build_env(worker),
+            env=_build_env(worker, config),
             cwd=worker.cwd,
         )
     except subprocess.TimeoutExpired:

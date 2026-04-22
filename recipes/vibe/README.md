@@ -14,22 +14,21 @@ routed to `vibe` instead.
 
 1. `vibe` on `PATH` (follow Mistral Vibe install instructions)
 2. A Mistral API key available in `$MISTRAL_API_KEY` or `~/.vibe/.env`
-3. A `research` agent provisioned in `~/.vibe/`:
 
-   ```bash
-   mkdir -p ~/.vibe/agents ~/.vibe/prompts
-   # agent.toml and prompt.md — bring your own, or copy these:
-   cp agent.toml  ~/.vibe/agents/research.toml
-   cp prompt.md   ~/.vibe/prompts/research.md
-   ```
+The agent and prompt are **bundled** in `vibe-home/` and used via `VIBE_HOME`
+override — no manual copying into `~/.vibe/` required.
 
 ## Install
 
 ```bash
 pipx install exactor
-cp .exactor.yml /path/to/your/repo/
+cp -r .exactor.yml vibe-home/ /path/to/your/repo/
 exactor check              # validate the config
 ```
+
+Keep `vibe-home/` next to `.exactor.yml`; the recipe points at it via
+`${EXACTOR_CONFIG_DIR}/vibe-home`, which Exactor resolves to the directory
+holding the loaded `.exactor.yml` at hook-invocation time.
 
 Add the hook to your Claude Code settings:
 
@@ -56,5 +55,17 @@ Restart Claude Code. Your next `WebSearch` runs through `vibe`.
 The `args` array maps directly to `vibe`'s CLI flags. Swap `--agent` to use a
 different local vibe agent, or drop `--max-turns` to use vibe's default.
 
-The `env` block is how secrets flow. `${VAR}` values are expanded from your
-host environment at hook-invocation time — nothing sensitive lives in the YAML.
+**Tune the researcher in-repo.** `vibe-home/prompts/research.md` is the live
+system prompt; edit it and the next hook invocation picks up the change.
+`vibe-home/agents/research.toml` selects the model and enabled tools.
+
+**Env substitution.** Values in the `env:` block are expanded at hook time
+against the host environment plus these Exactor-provided locals:
+
+| Variable | Value |
+|---|---|
+| `EXACTOR_CONFIG_DIR` | directory containing the loaded `.exactor.yml` |
+| `EXACTOR_CONFIG_FILE` | the `.exactor.yml` path itself |
+
+Nothing sensitive lives in the YAML — `${MISTRAL_API_KEY}` and friends come
+from the shell that invoked Claude Code.
