@@ -1,5 +1,13 @@
 version: 1
 
+# Failure policy.
+#   strict — worker failure blocks the raw tool (default). The model sees
+#            an "[exactor] worker failed" message and can decide how to react.
+#   loose  — worker failure allows the raw tool through as a fallback. Useful
+#            when you want routing as a preference, not a hard constraint.
+# Override per-worker with workers.<name>.mode.
+mode: strict
+
 # Memory backend — swappable. file is the default (no extra deps).
 # Options: file | sqlite (coming soon) | custom
 memory:

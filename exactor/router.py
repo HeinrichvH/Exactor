@@ -3,10 +3,18 @@ from __future__ import annotations
 import re
 import shlex
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from .config import Config, InterceptRule, Worker
+
+
+@dataclass
+class WorkerResult:
+    output: str
+    success: bool
+    worker_name: str
 
 
 _SINGLE_FILE_RE = re.compile(r"^(cat|head|tail|less)\s+(/[^\s;|&]+)$")
@@ -48,8 +56,8 @@ def match_rule(tool_name: str, tool_input: dict, config: Config) -> Optional[Int
     return None
 
 
-def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> str:
-    worker_name = rule.route_to
+def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerResult:
+    worker_name = rule.route_to or ""
     worker: Optional[Worker] = config.workers.get(worker_name)
     if not worker:
         raise ValueError(f"Worker '{worker_name}' not defined in config")
@@ -67,9 +75,25 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> str:
             timeout=worker.timeout,
         )
     except subprocess.TimeoutExpired:
-        return f"[exactor] worker '{worker_name}' timed out after {worker.timeout}s"
+        return WorkerResult(
+            output=f"[exactor] worker '{worker_name}' timed out after {worker.timeout}s",
+            success=False,
+            worker_name=worker_name,
+        )
 
-    output = result.stdout.strip()
     if result.returncode != 0:
-        output = f"[exactor] worker '{worker_name}' failed:\n{result.stderr.strip()}"
-    return output
+        return WorkerResult(
+            output=f"[exactor] worker '{worker_name}' failed (exit {result.returncode}):\n{result.stderr.strip()}",
+            success=False,
+            worker_name=worker_name,
+        )
+
+    return WorkerResult(
+        output=result.stdout.strip(),
+        success=True,
+        worker_name=worker_name,
+    )
+
+
+def effective_mode(worker: Worker, config: Config) -> str:
+    return worker.mode or config.mode

@@ -46,3 +46,39 @@ def test_default_memory_backend(tmp_path):
     cfg_file.write_text("workers: {}\nintercept: []\n")
     config = load_config(cfg_file)
     assert config.memory.backend == "file"
+
+
+def test_default_mode_is_strict(tmp_path):
+    cfg_file = tmp_path / ".exactor.yml"
+    cfg_file.write_text("workers: {}\nintercept: []\n")
+    config = load_config(cfg_file)
+    assert config.mode == "strict"
+
+
+def test_loose_mode_accepted(tmp_path):
+    cfg_file = tmp_path / ".exactor.yml"
+    cfg_file.write_text("mode: loose\nworkers: {}\nintercept: []\n")
+    config = load_config(cfg_file)
+    assert config.mode == "loose"
+
+
+def test_invalid_mode_rejected(tmp_path):
+    cfg_file = tmp_path / ".exactor.yml"
+    cfg_file.write_text("mode: chaotic\nworkers: {}\nintercept: []\n")
+    with pytest.raises(ValueError, match="mode must be one of"):
+        load_config(cfg_file)
+
+
+def test_per_worker_mode_override(tmp_path):
+    cfg_file = tmp_path / ".exactor.yml"
+    cfg_file.write_text("""
+mode: strict
+workers:
+  research:
+    command: "research {query}"
+    mode: loose
+intercept: []
+""")
+    config = load_config(cfg_file)
+    assert config.mode == "strict"
+    assert config.workers["research"].mode == "loose"

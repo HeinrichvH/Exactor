@@ -11,8 +11,8 @@ import json
 import sys
 from pathlib import Path
 
-from .config import Config, find_config, load_config
-from .router import match_rule, run_worker
+from .config import MODE_LOOSE, Config, find_config, load_config
+from .router import effective_mode, match_rule, run_worker
 
 
 def _load(config_path: Path | None) -> Config | None:
@@ -36,8 +36,22 @@ def pre_tool_use(config_path: Path | None = None) -> int:
         return 0
 
     if rule.route_to:
-        output = run_worker(rule, tool_input, config)
-        print(f"[exactor] routed {tool_name} → {rule.route_to}\n\n{output}")
+        result = run_worker(rule, tool_input, config)
+
+        if result.success:
+            print(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}")
+            return 2
+
+        # Worker failed (non-zero, timeout, etc). Apply mode policy.
+        worker = config.workers[result.worker_name]
+        if effective_mode(worker, config) == MODE_LOOSE:
+            # Let the original tool proceed; surface the failure on stderr so
+            # it shows up in hook logs without polluting the model's context.
+            print(f"[exactor] {result.output} — falling back to raw {tool_name}", file=sys.stderr)
+            return 0
+
+        # strict: block with the failure message
+        print(result.output)
         return 2
 
     return 0

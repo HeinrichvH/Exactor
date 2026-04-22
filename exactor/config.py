@@ -7,11 +7,17 @@ from typing import Optional
 import yaml
 
 
+MODE_STRICT = "strict"
+MODE_LOOSE = "loose"
+VALID_MODES = {MODE_STRICT, MODE_LOOSE}
+
+
 @dataclass
 class Worker:
     command: str
     description: str = ""
     timeout: Optional[int] = None      # seconds; None = no inner timeout
+    mode: Optional[str] = None         # strict | loose; None inherits Config.mode
 
 
 @dataclass
@@ -36,6 +42,7 @@ class Config:
     intercept: list[InterceptRule]
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     guards: dict = field(default_factory=dict)
+    mode: str = MODE_STRICT            # default failure policy for all workers
 
 
 def load_config(path: Path) -> Config:
@@ -46,20 +53,30 @@ def load_config(path: Path) -> Config:
         for name, w in (raw.get("workers") or {}).items()
     }
 
+    for name, worker in workers.items():
+        if worker.mode and worker.mode not in VALID_MODES:
+            raise ValueError(f"worker '{name}': mode must be one of {sorted(VALID_MODES)}, got '{worker.mode}'")
+
     intercept = [InterceptRule(**r) for r in (raw.get("intercept") or [])]
 
     memory_raw = raw.get("memory") or {}
     memory = MemoryConfig(**memory_raw) if memory_raw else MemoryConfig()
+
+    mode = raw.get("mode", MODE_STRICT)
+    if mode not in VALID_MODES:
+        raise ValueError(f"mode must be one of {sorted(VALID_MODES)}, got '{mode}'")
 
     return Config(
         workers=workers,
         intercept=intercept,
         memory=memory,
         guards=raw.get("guards") or {},
+        mode=mode,
     )
 
 
-def find_config(start: Path = Path.cwd()) -> Optional[Path]:
+def find_config(start: Optional[Path] = None) -> Optional[Path]:
+    start = start if start is not None else Path.cwd()
     for directory in [start, *start.parents]:
         candidate = directory / ".exactor.yml"
         if candidate.exists():

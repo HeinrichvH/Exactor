@@ -59,9 +59,9 @@ def test_worker_timeout_returns_clean_message():
         memory=MemoryConfig(),
     )
     rule = config.intercept[0]
-    output = run_worker(rule, {"query": "anything"}, config)
-    assert "timed out" in output
-    assert "slow" in output
+    result = run_worker(rule, {"query": "anything"}, config)
+    assert not result.success
+    assert "timed out" in result.output
 
 
 def test_worker_success_returns_stdout():
@@ -71,5 +71,18 @@ def test_worker_success_returns_stdout():
         memory=MemoryConfig(),
     )
     rule = config.intercept[0]
-    output = run_worker(rule, {"query": "world"}, config)
-    assert output == "hello-world"
+    result = run_worker(rule, {"query": "world"}, config)
+    assert result.success
+    assert result.output == "hello-world"
+
+
+def test_worker_nonzero_exit_marks_failure():
+    config = Config(
+        workers={"broken": Worker(command="exit 1")},
+        intercept=[InterceptRule(tool="WebSearch", route_to="broken")],
+        memory=MemoryConfig(),
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "q"}, config)
+    assert not result.success
+    assert "exit 1" in result.output
