@@ -1,0 +1,46 @@
+#
+# Exactor recipe: Mistral Vibe as a researcher worker.
+#
+# Self-contained: the agent + prompt live in vibe-home/ next to this file.
+# Exactor exposes EXACTOR_CONFIG_DIR = directory of this .exactor.yml, and
+# pointing VIBE_HOME there makes vibe read agents/ and prompts/ from the
+# recipe instead of ~/.vibe/. Editing vibe-home/prompts/research.md IS
+# editing the live prompt — no cp-to-home sync step.
+#
+# Requirements: `vibe` on PATH and MISTRAL_API_KEY in the environment
+# (or in ~/.vibe/.env, which vibe still reads globally).
+#
+
+version: 1
+
+mode: strict
+
+cache:
+  path: .exactor/cache.db
+  default_ttl_hours: 24
+
+workers:
+  research:
+    command: "vibe"
+    args:
+      - "-p"
+      - "{query}"
+      - "--agent"
+      - "research"
+      - "--max-turns"
+      - "100"
+      - "--output"
+      - "text"
+    stdin: devnull              # vibe blocks on an open fd 0 from non-TTY callers
+    env:
+      VIBE_HOME: "${EXACTOR_CONFIG_DIR}/vibe-home"
+    timeout: 240                # inner; set Claude Code hook timeout higher (e.g. 300)
+    cache: true
+
+intercept:
+  - tool: WebSearch
+    query_field: query        # Claude Code's WebSearch payload shape
+    route_to: research
+  - tool: WebFetch
+    query_field: url          # fetch takes {url, prompt}; url is enough context for vibe
+    route_to: research

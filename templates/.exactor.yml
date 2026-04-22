@@ -1,0 +1,57 @@
+version: 1
+
+# Failure policy.
+#   strict — worker failure blocks the raw tool (default). The model sees
+#            an "[exactor] worker failed" message and can decide how to react.
+#   loose  — worker failure allows the raw tool through as a fallback. Useful
+#            when you want routing as a preference, not a hard constraint.
+# Override per-worker with workers.<name>.mode.
+mode: strict
+
+# Working-memory cache (SQLite-backed, stdlib only).
+# Opt-in per worker via `cache: true`. TTL configurable per worker.
+cache:
+  path: .exactor/cache.db
+  default_ttl_hours: 24
+
+# Workers are plain shell commands. {query} is replaced with the intercepted input.
+# Bring your own — these are examples. Replace with whatever lives in your PATH.
+workers:
+  research:
+    command: "research {query}"
+    description: "Web research — requires a `research` tool in your PATH"
+    timeout: 240               # inner timeout in seconds; keep < outer Claude Code hook timeout
+    cache: true                # identical queries reused within cache_ttl_hours
+  explore:
+    command: "explore {query}"
+    description: "Codebase exploration — requires an `explore` tool in your PATH"
+    timeout: 60
+
+# Intercept rules — matched top to bottom, first match wins.
+#
+# query_field names the tool_input key that holds the relevant string (Exactor
+# doesn't hardcode any tool's schema). It's also the subject `match:` tests
+# against, so regex + query stay consistent. Omit it to pass str(tool_input).
+intercept:
+  # Route web searches to your researcher
+  - tool: WebSearch
+    query_field: query
+    route_to: research
+
+  # Route WebFetch to your researcher
+  - tool: WebFetch
+    query_field: url
+    route_to: research
+
+  # Route Bash grep/find/rg to your explorer
+  # unless: the command targets a single known file (cat /absolute/path)
+  - tool: Bash
+    query_field: command
+    match: "^(grep|rg|find)\\b"
+    route_to: explore
+    unless: single_file_absolute_path
+
+# Guards — applied in post-tool hook
+guards:
+  max_raw_output_lines: 80
+  warn_on_bypass: true
