@@ -142,6 +142,82 @@ def test_worker_env_exposes_exactor_config_dir(tmp_path):
     assert result.output == f"{tmp_path}/vibe-home"
 
 
+def test_args_expand_env_vars(monkeypatch, tmp_path):
+    # ${VAR} in args resolves against host env + exactor locals. Symmetric
+    # with worker.env expansion. Required so recipes can write
+    #   args: ["${EXACTOR_CONFIG_DIR}/explore.py", "{query}"]
+    monkeypatch.setenv("MY_DIR", str(tmp_path))
+    script = tmp_path / "hello.sh"
+    script.write_text("#!/bin/sh\necho $1\n")
+    script.chmod(0o755)
+    config = Config(
+        workers={"w": Worker(command="sh", args=["${MY_DIR}/hello.sh", "{query}"])},
+        intercept=[InterceptRule(tool="WebSearch", query_field="query", route_to="w")],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "hello-world"}, config)
+    assert result.success, result.output
+    assert result.output == "hello-world"
+
+
+def test_command_expands_env_vars(monkeypatch, tmp_path):
+    # Same expansion applies to worker.command, not just args.
+    monkeypatch.setenv("BIN_DIR", "/bin")
+    config = Config(
+        workers={"w": Worker(command="${BIN_DIR}/echo", args=["{query}"])},
+        intercept=[InterceptRule(tool="WebSearch", query_field="query", route_to="w")],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "ok"}, config)
+    assert result.success
+    assert result.output == "ok"
+
+
+def test_exactor_config_dir_available_in_args(tmp_path):
+    # The recipe-local EXACTOR_CONFIG_DIR is exposed to args so self-contained
+    # recipes don't need absolute paths.
+    cfg_path = tmp_path / ".exactor.yml"
+    cfg_path.write_text("")
+    script = tmp_path / "run.sh"
+    script.write_text("#!/bin/sh\necho ran:$1\n")
+    script.chmod(0o755)
+    config = Config(
+        workers={"w": Worker(command="sh", args=["${EXACTOR_CONFIG_DIR}/run.sh", "{query}"])},
+        intercept=[InterceptRule(tool="WebSearch", query_field="query", route_to="w")],
+        source=cfg_path,
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "x"}, config)
+    assert result.success, result.output
+    assert result.output == "ran:x"
+
+
+def test_query_is_not_env_expanded():
+    # A query containing ${VAR} must pass through verbatim — expanding it
+    # would be an info-leak surface (queries are untrusted model output).
+    config = Config(
+        workers={"w": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(tool="WebSearch", query_field="query", route_to="w")],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "literal-${HOME}-stays"}, config)
+    assert result.success
+    assert result.output == "literal-${HOME}-stays"
+
+
+def test_string_command_expands_env_vars(monkeypatch, tmp_path):
+    # Legacy string-form command (shell=True) gets the same expansion.
+    monkeypatch.setenv("PREFIX", "hello")
+    config = Config(
+        workers={"w": Worker(command="echo ${PREFIX}-{query}")},
+        intercept=[InterceptRule(tool="WebSearch", query_field="query", route_to="w")],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "world"}, config)
+    assert result.success
+    assert result.output == "hello-world"
+
+
 def test_worker_command_not_found_is_clean_failure():
     config = Config(
         workers={"w": Worker(command="this-does-not-exist", args=["{query}"])},
