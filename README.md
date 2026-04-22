@@ -37,7 +37,7 @@ intercept:
 Ready-made configs for common researcher and explorer tools live in [`recipes/`](recipes/).
 Copy the one matching your setup and drop it in your repo root.
 
-- [`recipes/vibe`](recipes/vibe) — [Mistral Vibe](https://github.com/mistralai/vibe)
+- [`recipes/vibe`](recipes/vibe) — [Mistral Vibe](https://github.com/mistralai/mistral-vibe)
   as a mandatory researcher
 - more coming (Claude CLI, Perplexity, Ollama — contributions welcome)
 

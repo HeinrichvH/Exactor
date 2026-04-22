@@ -1,6 +1,6 @@
 # Vibe recipe
 
-Uses [Mistral Vibe](https://github.com/mistralai/vibe) as an always-on researcher.
+Uses [Mistral Vibe](https://github.com/mistralai/mistral-vibe) as an always-on researcher.
 Every `WebSearch` and `WebFetch` Claude Code tries to run gets intercepted and
 routed to `vibe` instead.
 
