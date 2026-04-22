@@ -1,9 +1,13 @@
 """
 Hook dispatcher for Claude Code PreToolUse and PostToolUse events.
 
-Claude Code passes a JSON object on stdin. Exit codes:
-  0 — allow the tool call to proceed
-  2 — block the tool call; STDERR is shown to the model as feedback
+Claude Code passes a JSON object on stdin. PreToolUse can respond via the
+JSON protocol (stdout) with `permissionDecision: "deny"` + a reason — this
+renders as a clean "denied with context" rather than a hook *error* (which
+is how exit-2 surfaces). We deny the native call and hand Claude the worker
+output as the reason; the model reads that in place of the raw tool result.
+
+Exit 0 in all cases where we emit JSON; exit 0 (no output) for pass-through.
 """
 from __future__ import annotations
 
@@ -21,6 +25,20 @@ def _load(config_path: Path | None) -> Config | None:
     if not path:
         return None
     return load_config(path)
+
+
+def _deny(reason: str) -> None:
+    """Emit a PreToolUse JSON deny decision with a reason on stdout."""
+    json.dump(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": reason,
+            }
+        },
+        sys.stdout,
+    )
 
 
 def pre_tool_use(config_path: Path | None = None) -> int:
@@ -49,8 +67,8 @@ def pre_tool_use(config_path: Path | None = None) -> int:
         cache_key = make_key(rule.route_to, extract_query(rule, tool_input))
         hit = cache.get(cache_key)
         if hit is not None:
-            print(f"[exactor] cache hit for {rule.route_to} → returning stored result\n\n{hit}", file=sys.stderr)
-            return 2
+            _deny(f"[exactor] cache hit for {rule.route_to} → returning stored result\n\n{hit}")
+            return 0
 
     # 2. Run the worker
     result = run_worker(rule, tool_input, config)
@@ -61,8 +79,8 @@ def pre_tool_use(config_path: Path | None = None) -> int:
         cache.put(cache_key, result.output, ttl_seconds=ttl_hours * 3600)
 
     if result.success:
-        print(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}", file=sys.stderr)
-        return 2
+        _deny(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}")
+        return 0
 
     # 4. Worker failed. Apply mode policy.
     if effective_mode(worker, config) == MODE_LOOSE:
@@ -71,8 +89,8 @@ def pre_tool_use(config_path: Path | None = None) -> int:
         sys.stderr.write(f"[exactor] {result.output} — falling back to raw {tool_name}\n")
         return 0
 
-    print(result.output, file=sys.stderr)
-    return 2
+    _deny(result.output)
+    return 0
 
 
 def post_tool_use(config_path: Path | None = None) -> int:
