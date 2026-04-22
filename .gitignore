@@ -7,3 +7,22 @@ dist/
 build/
 .exactor/
 .pytest_cache/
+
+# Secrets — never commit a local .env
+.env
+.env.*
+!.env.example
+
+# Coverage
+.coverage
+htmlcov/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS cruft
+.DS_Store
+Thumbs.db
