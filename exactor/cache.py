@@ -69,5 +69,31 @@ class Cache:
         self._conn.commit()
         return cur.rowcount
 
+    def clear_all(self) -> int:
+        cur = self._conn.execute("DELETE FROM cache")
+        self._conn.commit()
+        return cur.rowcount
+
+    def clear_by_worker(self, worker_name: str) -> int:
+        cur = self._conn.execute(
+            "DELETE FROM cache WHERE key LIKE ? || ':%'",
+            (worker_name,),
+        )
+        self._conn.commit()
+        return cur.rowcount
+
+    def clear_by_query_substring(self, substring: str) -> int:
+        pattern = f"%{normalize_query(substring)}%"
+        cur = self._conn.execute("DELETE FROM cache WHERE key LIKE ?", (pattern,))
+        self._conn.commit()
+        return cur.rowcount
+
+    def list_entries(self) -> list[tuple[str, int, int]]:
+        """Return [(key, value_length, expires_at), ...] ordered by expiry."""
+        rows = self._conn.execute(
+            "SELECT key, length(value), expires_at FROM cache ORDER BY expires_at"
+        ).fetchall()
+        return [(k, n, e) for k, n, e in rows]
+
     def close(self) -> None:
         self._conn.close()
