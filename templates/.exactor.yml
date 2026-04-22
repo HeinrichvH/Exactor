@@ -52,7 +52,10 @@ intercept:
     route_to: research
 
   # Route Bash grep/find/rg to your explorer
-  # unless: the command targets a single known file (cat /absolute/path)
+  # unless: the command targets a single known file — cat/head/tail/less on
+  # an absolute path, or a narrow grep/rg on a single absolute path (no -r,
+  # no globs, no multi-file lists). Those are "I know the file, give me raw
+  # bytes" calls, not exploration.
   - tool: Bash
     query_field: command
     match: "^(grep|rg|find)\\b"

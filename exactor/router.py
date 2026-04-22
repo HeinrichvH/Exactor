@@ -20,11 +20,38 @@ class WorkerResult:
     worker_name: str
 
 
-_SINGLE_FILE_RE = re.compile(r"^(cat|head|tail|less)\s+(/[^\s;|&]+)$")
+_KNOWN_FILE_TOOLS = {"cat", "head", "tail", "less", "grep", "rg", "egrep", "fgrep"}
+_RECURSIVE_FLAGS = {"-r", "-R", "--recursive"}
+_GLOB_CHARS = set("*?[")
 
 
 def _is_single_file_absolute_path(command: str) -> bool:
-    return bool(_SINGLE_FILE_RE.match(command.strip()))
+    """True for narrow "I already know the file" shell invocations.
+
+    Matches `<tool> [flags] [pattern] /absolute/path` for cat/head/tail/less
+    and grep/rg/egrep/fgrep — the shape a caller uses when they know the file
+    and want raw bytes back, not a summary. Rejects recursive flags, globs,
+    multi-file lists, and shell metacharacters.
+    """
+    try:
+        parts = shlex.split(command.strip())
+    except ValueError:
+        return False
+    if len(parts) < 2 or parts[0] not in _KNOWN_FILE_TOOLS:
+        return False
+    last = parts[-1]
+    if not last.startswith("/") or any(c in last for c in _GLOB_CHARS):
+        return False
+    for p in parts[1:-1]:
+        if p in _RECURSIVE_FLAGS:
+            return False
+        # Short combined flags: -rn, -Rn, -nr etc.
+        if re.fullmatch(r"-[A-Za-z]+", p) and ("r" in p or "R" in p):
+            return False
+        # Other positional args starting with / mean multi-file → exploration.
+        if p.startswith("/"):
+            return False
+    return True
 
 
 class _SafeDict(dict):

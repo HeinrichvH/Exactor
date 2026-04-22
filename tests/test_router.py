@@ -29,16 +29,44 @@ def test_matches_bash_grep():
     assert rule is not None
 
 
-def test_bash_grep_unless_single_file():
+def test_bash_grep_single_file_bypassed():
+    # Narrow grep-on-known-file is a "I know the file, give me raw bytes" call,
+    # not exploration — pass through to the raw tool.
     config = _config(InterceptRule(tool="Bash", query_field="command", match=r"^(grep|rg)\b", route_to="explore", unless="single_file_absolute_path"))
-    # grep still matches even with unless=single_file (grep isn't cat)
     rule = match_rule("Bash", {"command": "grep foo /absolute/path/file.py"}, config)
+    assert rule is None
+
+
+def test_bash_rg_single_file_bypassed():
+    config = _config(InterceptRule(tool="Bash", query_field="command", match=r"^(grep|rg)\b", route_to="explore", unless="single_file_absolute_path"))
+    rule = match_rule("Bash", {"command": "rg pattern /abs/path/file.py"}, config)
+    assert rule is None
+
+
+def test_bash_grep_recursive_still_routes():
+    # -r is exploration, not a known-file read.
+    config = _config(InterceptRule(tool="Bash", query_field="command", match=r"^(grep|rg)\b", route_to="explore", unless="single_file_absolute_path"))
+    rule = match_rule("Bash", {"command": "grep -r foo /path"}, config)
+    assert rule is not None
+    rule = match_rule("Bash", {"command": "grep -rn foo /path"}, config)
+    assert rule is not None
+
+
+def test_bash_grep_multi_file_still_routes():
+    config = _config(InterceptRule(tool="Bash", query_field="command", match=r"^(grep|rg)\b", route_to="explore", unless="single_file_absolute_path"))
+    rule = match_rule("Bash", {"command": "grep foo /a/one.py /a/two.py"}, config)
     assert rule is not None
 
 
 def test_bash_cat_single_file_bypassed():
     config = _config(InterceptRule(tool="Bash", query_field="command", match=r"^cat\b", route_to="explore", unless="single_file_absolute_path"))
     rule = match_rule("Bash", {"command": "cat /home/user/project/file.py"}, config)
+    assert rule is None
+
+
+def test_bash_head_single_file_bypassed():
+    config = _config(InterceptRule(tool="Bash", query_field="command", match=r"^(cat|head|tail)\b", route_to="explore", unless="single_file_absolute_path"))
+    rule = match_rule("Bash", {"command": "head -n 50 /home/user/file.py"}, config)
     assert rule is None
 
 
