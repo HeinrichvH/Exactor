@@ -10,6 +10,29 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = ["pyyaml>=6.0"]
+authors = [
+  { name = "Heinrich von Helmolt", email = "heinrich.vonhelmolt@aquilo-solutions.com" },
+]
+keywords = ["claude-code", "hooks", "agents", "subagents", "delegation", "llm", "research"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage   = "https://github.com/HeinrichvH/Exactor"
+Repository = "https://github.com/HeinrichvH/Exactor"
+Issues     = "https://github.com/HeinrichvH/Exactor/issues"
+Changelog  = "https://github.com/HeinrichvH/Exactor/releases"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
