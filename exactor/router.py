@@ -26,14 +26,27 @@ def _is_single_file_absolute_path(command: str) -> bool:
     return bool(_SINGLE_FILE_RE.match(command.strip()))
 
 
+class _SafeDict(dict):
+    """Dict that renders missing keys as empty string during str.format_map.
+
+    Used by query_template so a tool_input missing an optional field (e.g.
+    Grep called without `path`) interpolates cleanly rather than raising.
+    """
+
+    def __missing__(self, key: str) -> str:  # type: ignore[override]
+        return ""
+
+
 def extract_query(rule: InterceptRule, tool_input: dict) -> str:
     """Pull the relevant string out of tool_input per the rule.
 
-    When the rule declares query_field, extract that key; otherwise stringify
-    the whole payload. This is how the router stays agnostic to any particular
-    tool's input schema — the recipe names the field, Exactor doesn't hardcode
-    Claude Code's tool shapes.
+    Precedence: query_template > query_field > str(tool_input). This is how
+    the router stays agnostic to any particular tool's input schema — the
+    recipe names the field(s), Exactor doesn't hardcode Claude Code's tool
+    shapes.
     """
+    if rule.query_template:
+        return rule.query_template.format_map(_SafeDict(tool_input))
     if rule.query_field:
         return str(tool_input.get(rule.query_field, ""))
     return str(tool_input)
@@ -50,7 +63,10 @@ def match_rule(tool_name: str, tool_input: dict, config: Config) -> Optional[Int
     for rule in config.intercept:
         if rule.tool != tool_name:
             continue
-        if rule.match and not re.search(rule.match, extract_query(rule, tool_input)):
+        query = extract_query(rule, tool_input)
+        if rule.match and not re.search(rule.match, query):
+            continue
+        if rule.unless_match and re.search(rule.unless_match, query):
             continue
         if _apply_unless(rule, tool_input):
             continue

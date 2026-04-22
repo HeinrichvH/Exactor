@@ -39,8 +39,17 @@ class InterceptRule:
     query_field: Optional[str] = None  # tool_input key to extract (e.g. "query" for WebSearch).
                                        # Falls back to str(tool_input). Also used as the subject
                                        # for `match:` regex, so both stay consistent.
-    match: Optional[str] = None        # regex on the query_field value (or str(tool_input))
-    unless: Optional[str] = None       # heuristic: "single_file_absolute_path"
+    query_template: Optional[str] = None  # Python str.format-style template interpolating
+                                          # multiple tool_input fields, e.g.
+                                          #   "find '{pattern}' in path '{path}'"
+                                          # Takes precedence over query_field. Missing keys
+                                          # render as the empty string.
+    match: Optional[str] = None        # regex on the extracted query; rule skipped if it fails
+    unless: Optional[str] = None       # named predicate, e.g. "single_file_absolute_path";
+                                       # rule skipped if the predicate fires
+    unless_match: Optional[str] = None # regex on the extracted query; rule skipped if it matches.
+                                       # Symmetric with `match:`, more flexible than named
+                                       # predicates for query-shape heuristics.
     output_lines_gt: Optional[int] = None
 
 
@@ -75,6 +84,13 @@ def load_config(path: Path) -> Config:
             raise ValueError(f"worker '{name}': stdin must be one of {sorted(VALID_STDIN)}, got '{worker.stdin}'")
 
     intercept = [InterceptRule(**r) for r in (raw.get("intercept") or [])]
+
+    for i, rule in enumerate(intercept):
+        if rule.route_to and rule.route_to not in workers:
+            raise ValueError(
+                f"intercept[{i}] (tool={rule.tool}): route_to='{rule.route_to}' "
+                f"does not match any defined worker (have: {sorted(workers) or 'none'})"
+            )
 
     cache_raw = raw.get("cache") or {}
     cache = CacheConfig(**cache_raw) if cache_raw else CacheConfig()

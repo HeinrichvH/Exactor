@@ -42,6 +42,23 @@ def _deny(reason: str) -> None:
 
 
 def pre_tool_use(config_path: Path | None = None) -> int:
+    """Entry point. Always fail-open: any unexpected error lets the raw tool run.
+
+    Rationale: under a catch-all Claude matcher (".*"), this hook fires for
+    every tool call. A bug in Exactor — malformed stdin, missing worker, YAML
+    error — must not block the host from making progress. We log the failure
+    so it's diagnosable, then exit 0.
+    """
+    try:
+        return _pre_tool_use_impl(config_path)
+    except Exception as e:  # noqa: BLE001 — intentional catch-all; see docstring
+        sys.stderr.write(
+            f"[exactor] hook raised {type(e).__name__}: {e} — falling through to raw tool\n"
+        )
+        return 0
+
+
+def _pre_tool_use_impl(config_path: Path | None) -> int:
     payload = json.loads(sys.stdin.read())
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
@@ -57,7 +74,15 @@ def pre_tool_use(config_path: Path | None = None) -> int:
     if not rule.route_to:
         return 0
 
-    worker = config.workers[rule.route_to]
+    worker = config.workers.get(rule.route_to)
+    if worker is None:
+        # Defense in depth — load_config validates this, but belt-and-braces
+        # so runtime never crashes on a stale/partial config.
+        sys.stderr.write(
+            f"[exactor] rule for {tool_name} routes to unknown worker "
+            f"'{rule.route_to}' — falling through to raw tool\n"
+        )
+        return 0
 
     # 1. Cache lookup (only if worker opts in)
     cache: Cache | None = None
@@ -94,6 +119,17 @@ def pre_tool_use(config_path: Path | None = None) -> int:
 
 
 def post_tool_use(config_path: Path | None = None) -> int:
+    """Fail-open for the same reason as pre_tool_use."""
+    try:
+        return _post_tool_use_impl(config_path)
+    except Exception as e:  # noqa: BLE001
+        sys.stderr.write(
+            f"[exactor] post-hook raised {type(e).__name__}: {e} — passing output through unchanged\n"
+        )
+        return 0
+
+
+def _post_tool_use_impl(config_path: Path | None) -> int:
     payload = json.loads(sys.stdin.read())
     tool_output = payload.get("tool_output", "")
 
