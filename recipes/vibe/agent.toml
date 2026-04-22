@@ -1,0 +1,15 @@
+active_model = "devstral-latest"
+system_prompt_id = "research"
+enabled_tools = ["web_search", "web_fetch", "read_file", "todo"]
+
+[tools.web_search]
+permission = "always"
+
+[tools.web_fetch]
+permission = "always"
+
+[tools.read_file]
+permission = "always"
+
+[tools.todo]
+permission = "always"

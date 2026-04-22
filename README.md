@@ -32,18 +32,42 @@ intercept:
     route_to: explore
 ```
 
+## Recipes
+
+Ready-made configs for common researcher and explorer tools live in [`recipes/`](recipes/).
+Copy the one matching your setup and drop it in your repo root.
+
+- [`recipes/vibe`](recipes/vibe) — [Mistral Vibe](https://github.com/mistralai/vibe)
+  as a mandatory researcher
+- more coming (Claude CLI, Perplexity, Ollama — contributions welcome)
+
+## Worker contract
+
+A worker is any CLI that:
+
+- accepts the intercepted query via `{query}` substitution
+- reads nothing from stdin (by default; configurable via `stdin:`)
+- writes the result to stdout
+- writes errors to stderr
+- exits 0 on success, non-zero on failure
+
+Pass flags via `args:`, secrets via `env:`. See [`recipes/vibe/.exactor.yml`](recipes/vibe/.exactor.yml)
+for a complete example.
+
 ## Status
 
-Early development. Core hook dispatcher in progress.
+Early development. Core hook dispatcher and SQLite working-memory cache
+are in place. Structured worker invocation (`args` / `env` / `stdin` / `cwd`)
+landed.
 
 ## Installation
 
 ```bash
-pip install exactor
+pipx install exactor
 exactor init
 ```
 
-*Coming soon.*
+*Published to PyPI soon.*
 
 ## License
 

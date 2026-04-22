@@ -1,0 +1,38 @@
+#
+# Exactor recipe: Mistral Vibe as a researcher worker.
+#
+# Assumes: `vibe` is on PATH, and you've provisioned ~/.vibe/agents/research.toml
+# and ~/.vibe/prompts/research.md (see README.md in this directory).
+#
+
+version: 1
+
+mode: strict
+
+cache:
+  path: .exactor/cache.db
+  default_ttl_hours: 24
+
+workers:
+  research:
+    command: "vibe"
+    args:
+      - "-p"
+      - "{query}"
+      - "--agent"
+      - "research"
+      - "--max-turns"
+      - "100"
+      - "--output"
+      - "text"
+    stdin: devnull              # vibe blocks on an open fd 0 from non-TTY callers
+    env:
+      VIBE_HOME: "${HOME}/.vibe"
+    timeout: 240                # inner; set Claude Code hook timeout higher (e.g. 300)
+    cache: true
+
+intercept:
+  - tool: WebSearch
+    route_to: research
+  - tool: WebFetch
+    route_to: research
