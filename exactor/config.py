@@ -42,12 +42,6 @@ class InterceptRule:
 
 
 @dataclass
-class MemoryConfig:
-    backend: str = "file"
-    path: str = ".exactor/session"
-
-
-@dataclass
 class CacheConfig:
     path: str = ".exactor/cache.db"
     default_ttl_hours: int = 24
@@ -57,7 +51,6 @@ class CacheConfig:
 class Config:
     workers: dict[str, Worker]
     intercept: list[InterceptRule]
-    memory: MemoryConfig = field(default_factory=MemoryConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     guards: dict = field(default_factory=dict)
     mode: str = MODE_STRICT            # default failure policy for all workers
@@ -80,9 +73,6 @@ def load_config(path: Path) -> Config:
 
     intercept = [InterceptRule(**r) for r in (raw.get("intercept") or [])]
 
-    memory_raw = raw.get("memory") or {}
-    memory = MemoryConfig(**memory_raw) if memory_raw else MemoryConfig()
-
     cache_raw = raw.get("cache") or {}
     cache = CacheConfig(**cache_raw) if cache_raw else CacheConfig()
 
@@ -93,7 +83,6 @@ def load_config(path: Path) -> Config:
     return Config(
         workers=workers,
         intercept=intercept,
-        memory=memory,
         cache=cache,
         guards=raw.get("guards") or {},
         mode=mode,

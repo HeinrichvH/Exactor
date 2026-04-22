@@ -41,13 +41,6 @@ intercept:
     assert config.intercept[1].unless == "single_file_absolute_path"
 
 
-def test_default_memory_backend(tmp_path):
-    cfg_file = tmp_path / ".exactor.yml"
-    cfg_file.write_text("workers: {}\nintercept: []\n")
-    config = load_config(cfg_file)
-    assert config.memory.backend == "file"
-
-
 def test_default_mode_is_strict(tmp_path):
     cfg_file = tmp_path / ".exactor.yml"
     cfg_file.write_text("workers: {}\nintercept: []\n")

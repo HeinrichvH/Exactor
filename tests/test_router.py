@@ -1,5 +1,5 @@
 import pytest
-from exactor.config import Config, InterceptRule, MemoryConfig, Worker
+from exactor.config import Config, InterceptRule, Worker
 from exactor.router import match_rule, run_worker
 
 
@@ -7,7 +7,6 @@ def _config(*rules: InterceptRule) -> Config:
     return Config(
         workers={"research": Worker("research {query}"), "explore": Worker("explore {query}")},
         intercept=list(rules),
-        memory=MemoryConfig(),
     )
 
 
@@ -56,7 +55,6 @@ def test_worker_timeout_returns_clean_message():
     config = Config(
         workers={"slow": Worker(command="sleep 5", timeout=1)},
         intercept=[InterceptRule(tool="WebSearch", route_to="slow")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "anything"}, config)
@@ -68,7 +66,6 @@ def test_worker_success_returns_stdout():
     config = Config(
         workers={"echo": Worker(command="echo hello-{query}")},
         intercept=[InterceptRule(tool="WebSearch", route_to="echo")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "world"}, config)
@@ -80,7 +77,6 @@ def test_worker_nonzero_exit_marks_failure():
     config = Config(
         workers={"broken": Worker(command="exit 1")},
         intercept=[InterceptRule(tool="WebSearch", route_to="broken")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "q"}, config)
@@ -94,7 +90,6 @@ def test_worker_args_form_shell_false():
     config = Config(
         workers={"echo": Worker(command="echo", args=["{query}"])},
         intercept=[InterceptRule(tool="WebSearch", route_to="echo")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "foo; rm -rf ~"}, config)
@@ -106,7 +101,6 @@ def test_worker_args_with_flags():
     config = Config(
         workers={"w": Worker(command="sh", args=["-c", "echo flag1=$1 flag2=$2", "--", "{query}", "B"])},
         intercept=[InterceptRule(tool="WebSearch", route_to="w")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "A"}, config)
@@ -123,7 +117,6 @@ def test_worker_env_var_expansion(monkeypatch):
             env={"MY_VAR": "${MY_SECRET}-suffix"},
         )},
         intercept=[InterceptRule(tool="WebSearch", route_to="w")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "x"}, config)
@@ -141,7 +134,6 @@ def test_worker_env_exposes_exactor_config_dir(tmp_path):
             env={"RECIPE_ROOT": "${EXACTOR_CONFIG_DIR}/vibe-home"},
         )},
         intercept=[InterceptRule(tool="WebSearch", route_to="w")],
-        memory=MemoryConfig(),
         source=cfg_path,
     )
     rule = config.intercept[0]
@@ -154,7 +146,6 @@ def test_worker_command_not_found_is_clean_failure():
     config = Config(
         workers={"w": Worker(command="this-does-not-exist", args=["{query}"])},
         intercept=[InterceptRule(tool="WebSearch", route_to="w")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "x"}, config)
@@ -166,7 +157,6 @@ def test_worker_cwd():
     config = Config(
         workers={"w": Worker(command="pwd", cwd="/tmp")},
         intercept=[InterceptRule(tool="WebSearch", route_to="w")],
-        memory=MemoryConfig(),
     )
     rule = config.intercept[0]
     result = run_worker(rule, {"query": "x"}, config)

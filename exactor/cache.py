@@ -3,9 +3,6 @@ Working-memory cache. SQLite-backed, stdlib only.
 
 One table, three columns. Indexed by key. TTL expressed as an absolute
 expires_at timestamp so every read is a single indexed lookup.
-
-Not a long-term memory. When a research result is relevant beyond its TTL,
-the memory layer (future) is where it belongs.
 """
 from __future__ import annotations
 
