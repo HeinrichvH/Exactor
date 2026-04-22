@@ -8,6 +8,12 @@ version: 1
 # Override per-worker with workers.<name>.mode.
 mode: strict
 
+# Working-memory cache (SQLite-backed, stdlib only).
+# Opt-in per worker via `cache: true`. TTL configurable per worker.
+cache:
+  path: .exactor/cache.db
+  default_ttl_hours: 24
+
 # Memory backend — swappable. file is the default (no extra deps).
 # Options: file | sqlite (coming soon) | custom
 memory:
@@ -21,6 +27,7 @@ workers:
     command: "research {query}"
     description: "Web research — requires a `research` tool in your PATH"
     timeout: 240               # inner timeout in seconds; keep < outer Claude Code hook timeout
+    cache: true                # identical queries reused within cache_ttl_hours
   explore:
     command: "explore {query}"
     description: "Codebase exploration — requires an `explore` tool in your PATH"

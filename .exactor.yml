@@ -2,6 +2,10 @@ version: 1
 
 mode: strict
 
+cache:
+  path: .exactor/cache.db
+  default_ttl_hours: 24
+
 memory:
   backend: file
   path: .exactor/session
@@ -11,6 +15,7 @@ workers:
     command: "research {query}"
     description: "Web research via Mistral Vibe"
     timeout: 240               # inner timeout; set Claude Code hook timeout higher (e.g. 300)
+    cache: true                # cache identical queries for default_ttl_hours
 
 intercept:
   - tool: WebSearch

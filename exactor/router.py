@@ -32,7 +32,7 @@ def _apply_unless(rule: InterceptRule, tool_input: dict) -> bool:
     return False
 
 
-def _extract_query(rule: InterceptRule, tool_input: dict) -> str:
+def extract_query(rule: InterceptRule, tool_input: dict) -> str:
     if rule.tool == "Bash":
         return tool_input.get("command", "")
     if rule.tool in ("WebSearch",):
@@ -62,7 +62,7 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
     if not worker:
         raise ValueError(f"Worker '{worker_name}' not defined in config")
 
-    query = _extract_query(rule, tool_input)
+    query = extract_query(rule, tool_input)
     command = worker.command.replace("{query}", shlex.quote(query))
 
     try:

@@ -11,8 +11,9 @@ import json
 import sys
 from pathlib import Path
 
+from .cache import Cache, make_key
 from .config import MODE_LOOSE, Config, find_config, load_config
-from .router import effective_mode, match_rule, run_worker
+from .router import effective_mode, extract_query, match_rule, run_worker
 
 
 def _load(config_path: Path | None) -> Config | None:
@@ -35,26 +36,41 @@ def pre_tool_use(config_path: Path | None = None) -> int:
     if not rule:
         return 0
 
-    if rule.route_to:
-        result = run_worker(rule, tool_input, config)
+    if not rule.route_to:
+        return 0
 
-        if result.success:
-            print(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}")
+    worker = config.workers[rule.route_to]
+
+    # 1. Cache lookup (only if worker opts in)
+    cache: Cache | None = None
+    cache_key: str | None = None
+    if worker.cache:
+        cache = Cache(Path(config.cache.path))
+        cache_key = make_key(rule.route_to, extract_query(rule, tool_input))
+        hit = cache.get(cache_key)
+        if hit is not None:
+            print(f"[exactor] cache hit for {rule.route_to} → returning stored result\n\n{hit}")
             return 2
 
-        # Worker failed (non-zero, timeout, etc). Apply mode policy.
-        worker = config.workers[result.worker_name]
-        if effective_mode(worker, config) == MODE_LOOSE:
-            # Let the original tool proceed; surface the failure on stderr so
-            # it shows up in hook logs without polluting the model's context.
-            print(f"[exactor] {result.output} — falling back to raw {tool_name}", file=sys.stderr)
-            return 0
+    # 2. Run the worker
+    result = run_worker(rule, tool_input, config)
 
-        # strict: block with the failure message
-        print(result.output)
+    # 3. Store on success (only if worker opts in)
+    if result.success and cache is not None and cache_key is not None:
+        ttl_hours = worker.cache_ttl_hours or config.cache.default_ttl_hours
+        cache.put(cache_key, result.output, ttl_seconds=ttl_hours * 3600)
+
+    if result.success:
+        print(f"[exactor] routed {tool_name} → {result.worker_name}\n\n{result.output}")
         return 2
 
-    return 0
+    # 4. Worker failed. Apply mode policy.
+    if effective_mode(worker, config) == MODE_LOOSE:
+        print(f"[exactor] {result.output} — falling back to raw {tool_name}", file=sys.stderr)
+        return 0
+
+    print(result.output)
+    return 2
 
 
 def post_tool_use(config_path: Path | None = None) -> int:

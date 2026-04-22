@@ -18,6 +18,8 @@ class Worker:
     description: str = ""
     timeout: Optional[int] = None      # seconds; None = no inner timeout
     mode: Optional[str] = None         # strict | loose; None inherits Config.mode
+    cache: bool = False                # opt-in to working-memory cache
+    cache_ttl_hours: Optional[int] = None  # None inherits CacheConfig.default_ttl_hours
 
 
 @dataclass
@@ -37,10 +39,17 @@ class MemoryConfig:
 
 
 @dataclass
+class CacheConfig:
+    path: str = ".exactor/cache.db"
+    default_ttl_hours: int = 24
+
+
+@dataclass
 class Config:
     workers: dict[str, Worker]
     intercept: list[InterceptRule]
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
     guards: dict = field(default_factory=dict)
     mode: str = MODE_STRICT            # default failure policy for all workers
 
@@ -62,6 +71,9 @@ def load_config(path: Path) -> Config:
     memory_raw = raw.get("memory") or {}
     memory = MemoryConfig(**memory_raw) if memory_raw else MemoryConfig()
 
+    cache_raw = raw.get("cache") or {}
+    cache = CacheConfig(**cache_raw) if cache_raw else CacheConfig()
+
     mode = raw.get("mode", MODE_STRICT)
     if mode not in VALID_MODES:
         raise ValueError(f"mode must be one of {sorted(VALID_MODES)}, got '{mode}'")
@@ -70,6 +82,7 @@ def load_config(path: Path) -> Config:
         workers=workers,
         intercept=intercept,
         memory=memory,
+        cache=cache,
         guards=raw.get("guards") or {},
         mode=mode,
     )
