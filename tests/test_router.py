@@ -179,6 +179,116 @@ def test_no_query_field_passes_whole_payload():
     assert "'a': 1" in result.output and "'b': 2" in result.output
 
 
+def test_query_template_interpolates_multiple_fields():
+    # Typical Grep intercept: fold pattern + path + glob into one question.
+    config = Config(
+        workers={"echo": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(
+            tool="Grep",
+            query_template="find '{pattern}' in path '{path}' (glob={glob})",
+            route_to="echo",
+        )],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"pattern": "TODO", "path": "src/", "glob": "*.py"}, config)
+    assert result.success
+    assert result.output == "find 'TODO' in path 'src/' (glob=*.py)"
+
+
+def test_query_template_missing_fields_render_empty():
+    # Glob called without an optional `path`: template interpolates "" safely.
+    config = Config(
+        workers={"echo": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(
+            tool="Glob",
+            query_template="glob '{pattern}' under '{path}'",
+            route_to="echo",
+        )],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"pattern": "**/*.ts"}, config)
+    assert result.success
+    assert result.output == "glob '**/*.ts' under ''"
+
+
+def test_query_template_takes_precedence_over_query_field():
+    # If both are set, template wins (template is the more expressive form).
+    config = Config(
+        workers={"echo": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(
+            tool="Grep",
+            query_field="pattern",
+            query_template="grep-for:{pattern}+scoped:{path}",
+            route_to="echo",
+        )],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"pattern": "X", "path": "Y"}, config)
+    assert result.output == "grep-for:X+scoped:Y"
+
+
+def test_query_template_match_regex_applies_to_rendered_string():
+    # match: runs against the templated query, not the raw field.
+    config = Config(
+        workers={"echo": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(
+            tool="Grep",
+            query_template="scope={path}|pat={pattern}",
+            match=r"scope=src/",
+            route_to="echo",
+        )],
+    )
+    # Matches: path is src/.
+    assert match_rule("Grep", {"pattern": "X", "path": "src/"}, config) is not None
+    # Doesn't match: path is tests/.
+    assert match_rule("Grep", {"pattern": "X", "path": "tests/"}, config) is None
+
+
+def test_unless_match_skips_rule_on_regex_hit():
+    # "unless_match" is a negated regex — rule fires only when the query does NOT match.
+    config = _config(InterceptRule(
+        tool="Grep",
+        query_template="pattern={pattern}",
+        unless_match=r"pattern=.{1,3}$",  # skip very short patterns
+        route_to="explore",
+    ))
+    # Long pattern → intercept applies
+    assert match_rule("Grep", {"pattern": "PricingConfig"}, config) is not None
+    # Short pattern → rule skipped
+    assert match_rule("Grep", {"pattern": "TO"}, config) is None
+
+
+def test_match_and_unless_match_compose():
+    # Both gates evaluated; rule only fires when match passes AND unless_match doesn't.
+    config = _config(InterceptRule(
+        tool="Grep",
+        query_template="pat={pattern}|path={path}",
+        match=r"path=src/",                # must be scoped to src/
+        unless_match=r"pat=.{1,2}\|",      # skip 1-2 char patterns
+        route_to="explore",
+    ))
+    assert match_rule("Grep", {"pattern": "PricingConfig", "path": "src/"}, config) is not None
+    assert match_rule("Grep", {"pattern": "PC", "path": "src/"}, config) is None  # too short
+    assert match_rule("Grep", {"pattern": "PricingConfig", "path": "tests/"}, config) is None  # wrong scope
+
+
+def test_query_template_literal_braces_in_value_dont_re_interpret():
+    # A tool_input value containing {foo} should appear verbatim, not trigger
+    # another round of substitution.
+    config = Config(
+        workers={"echo": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(
+            tool="Grep",
+            query_template="pattern={pattern}",
+            route_to="echo",
+        )],
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"pattern": "{nested}"}, config)
+    assert result.success
+    assert result.output == "pattern={nested}"
+
+
 def test_worker_cwd():
     config = Config(
         workers={"w": Worker(command="pwd", cwd="/tmp")},

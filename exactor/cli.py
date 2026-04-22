@@ -116,7 +116,10 @@ def main() -> None:
     sub.add_parser("check", help="Validate .exactor.yml")
 
     p_hook = sub.add_parser("hook", help="Run as a Claude Code hook")
-    p_hook.add_argument("event", choices=["pre", "post"])
+    # `event` defaults to "pre" because that's ~95% of hook installs and
+    # older docs recommended the bare `exactor hook` form. Keeping the
+    # default avoids silent argparse failure under a catch-all matcher.
+    p_hook.add_argument("event", choices=["pre", "post"], nargs="?", default="pre")
 
     p_cache = sub.add_parser("cache", help="Inspect or clear the working-memory cache")
     cache_sub = p_cache.add_subparsers(dest="cache_action")

@@ -1,0 +1,70 @@
+#
+# Exactor recipe: delegate Grep / Glob / Read exploration to a code-search
+# subagent. This is a skeleton — you provide the `explore` CLI, Exactor
+# routes the raw Claude Code tool calls to it and returns the cited report
+# in place of raw regex output.
+#
+# Contract for your explore CLI:
+#   - argv: one positional argument, a natural-language exploration question.
+#   - stdout: a compact, cited report (JSON or prose — the model reads it).
+#   - exit 0 on success, non-zero on failure.
+#
+# Example implementations:
+#   - Goose recipe with read-only shell + text_editor tools
+#   - Claude API subprocess with a code-search system prompt
+#   - Aider in read-only mode
+#   - A shell script wrapping `rg --json` + a post-processor
+#
+# The point isn't *which* subagent — it's that Grep/Glob patterns become
+# compact cited reports instead of raw file-listing output that burns
+# context on every exploration round.
+#
+# Why route Grep AND Glob AND (optionally) Read: the waste isn't a single
+# Grep call — it's the loop of Grep → Read → Grep → Read that discovers
+# structure. A subagent does the loop in one subprocess and returns a
+# summarized report.
+#
+
+version: 1
+mode: strict
+
+cache:
+  path: .exactor/cache.db
+  default_ttl_hours: 24
+
+workers:
+  explore:
+    command: "explore"        # your CLI on PATH, or an absolute path here
+    args:
+      - "{query}"
+    stdin: devnull
+    timeout: 300
+    cache: false              # code state changes under us; caching stale
+                              # exploration reports is worse than re-running
+                              # the subagent. Flip to true only if you know
+                              # your codebase is effectively read-only.
+
+intercept:
+  # Grep: fold pattern + scope fields into a single natural-language query.
+  - tool: Grep
+    query_template: "search for '{pattern}' in path '{path}' (glob: {glob}, type: {type})"
+    route_to: explore
+    # Skip targeted lookups where you already know the location — these are
+    # the "single known file" case where direct Grep is cheaper than a
+    # subagent subprocess. Tune the regex for your project.
+    unless_match: '^search for ''\S{1,3}'''   # very short patterns (typos, sigils)
+
+  # Glob: same idea. Path scopes the search; pattern is the glob expression.
+  - tool: Glob
+    query_template: "list files matching '{pattern}' under '{path}'"
+    route_to: explore
+
+  # Read: OPTIONAL and aggressive — every Read call gets summarized instead
+  # of returning raw file contents. Uncomment only if you actively want to
+  # enforce "no direct file reads during exploration." Most users should
+  # leave this off and rely on Grep/Glob interception to cover the loops.
+  #
+  # - tool: Read
+  #   query_template: "summarize the relevant parts of {file_path} (offset={offset}, limit={limit})"
+  #   route_to: explore
+  #   unless_match: '^.*\.(json|ya?ml|toml|md)$'  # skip structured config / docs
