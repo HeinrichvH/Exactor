@@ -82,3 +82,40 @@ intercept: []
     config = load_config(cfg_file)
     assert config.mode == "strict"
     assert config.workers["research"].mode == "loose"
+
+
+def test_worker_structured_args_loaded(tmp_path):
+    cfg_file = tmp_path / ".exactor.yml"
+    cfg_file.write_text("""
+workers:
+  research:
+    command: "vibe"
+    args:
+      - "-p"
+      - "{query}"
+      - "--agent"
+      - "research"
+    env:
+      VIBE_HOME: "${HOME}/.vibe"
+    stdin: devnull
+intercept: []
+""")
+    config = load_config(cfg_file)
+    w = config.workers["research"]
+    assert w.command == "vibe"
+    assert w.args == ["-p", "{query}", "--agent", "research"]
+    assert w.env == {"VIBE_HOME": "${HOME}/.vibe"}
+    assert w.stdin == "devnull"
+
+
+def test_invalid_stdin_rejected(tmp_path):
+    cfg_file = tmp_path / ".exactor.yml"
+    cfg_file.write_text("""
+workers:
+  w:
+    command: "echo"
+    stdin: pipe
+intercept: []
+""")
+    with pytest.raises(ValueError, match="stdin must be one of"):
+        load_config(cfg_file)

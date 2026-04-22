@@ -86,3 +86,70 @@ def test_worker_nonzero_exit_marks_failure():
     result = run_worker(rule, {"query": "q"}, config)
     assert not result.success
     assert "exit 1" in result.output
+
+
+def test_worker_args_form_shell_false():
+    # args form should NOT go through a shell — shell metacharacters in
+    # the query must appear verbatim as the argument, not interpreted.
+    config = Config(
+        workers={"echo": Worker(command="echo", args=["{query}"])},
+        intercept=[InterceptRule(tool="WebSearch", route_to="echo")],
+        memory=MemoryConfig(),
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "foo; rm -rf ~"}, config)
+    assert result.success
+    assert result.output == "foo; rm -rf ~"  # literal, shell did not parse
+
+
+def test_worker_args_with_flags():
+    config = Config(
+        workers={"w": Worker(command="sh", args=["-c", "echo flag1=$1 flag2=$2", "--", "{query}", "B"])},
+        intercept=[InterceptRule(tool="WebSearch", route_to="w")],
+        memory=MemoryConfig(),
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "A"}, config)
+    assert result.success
+    assert result.output == "flag1=A flag2=B"
+
+
+def test_worker_env_var_expansion(monkeypatch):
+    monkeypatch.setenv("MY_SECRET", "opensesame")
+    config = Config(
+        workers={"w": Worker(
+            command="sh",
+            args=["-c", "echo $MY_VAR"],
+            env={"MY_VAR": "${MY_SECRET}-suffix"},
+        )},
+        intercept=[InterceptRule(tool="WebSearch", route_to="w")],
+        memory=MemoryConfig(),
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "x"}, config)
+    assert result.success
+    assert result.output == "opensesame-suffix"
+
+
+def test_worker_command_not_found_is_clean_failure():
+    config = Config(
+        workers={"w": Worker(command="this-does-not-exist", args=["{query}"])},
+        intercept=[InterceptRule(tool="WebSearch", route_to="w")],
+        memory=MemoryConfig(),
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "x"}, config)
+    assert not result.success
+    assert "not found" in result.output
+
+
+def test_worker_cwd():
+    config = Config(
+        workers={"w": Worker(command="pwd", cwd="/tmp")},
+        intercept=[InterceptRule(tool="WebSearch", route_to="w")],
+        memory=MemoryConfig(),
+    )
+    rule = config.intercept[0]
+    result = run_worker(rule, {"query": "x"}, config)
+    assert result.success
+    assert result.output == "/tmp"

@@ -11,6 +11,11 @@ MODE_STRICT = "strict"
 MODE_LOOSE = "loose"
 VALID_MODES = {MODE_STRICT, MODE_LOOSE}
 
+STDIN_DEVNULL = "devnull"
+STDIN_INHERIT = "inherit"
+STDIN_CLOSE = "close"
+VALID_STDIN = {STDIN_DEVNULL, STDIN_INHERIT, STDIN_CLOSE}
+
 
 @dataclass
 class Worker:
@@ -20,6 +25,10 @@ class Worker:
     mode: Optional[str] = None         # strict | loose; None inherits Config.mode
     cache: bool = False                # opt-in to working-memory cache
     cache_ttl_hours: Optional[int] = None  # None inherits CacheConfig.default_ttl_hours
+    args: Optional[list] = None        # structured args — when present, shell=False
+    env: Optional[dict] = None         # subprocess env overlay; ${VAR} expanded from host env
+    stdin: str = STDIN_DEVNULL         # devnull | inherit | close
+    cwd: Optional[str] = None          # working directory for the subprocess
 
 
 @dataclass
@@ -65,6 +74,8 @@ def load_config(path: Path) -> Config:
     for name, worker in workers.items():
         if worker.mode and worker.mode not in VALID_MODES:
             raise ValueError(f"worker '{name}': mode must be one of {sorted(VALID_MODES)}, got '{worker.mode}'")
+        if worker.stdin not in VALID_STDIN:
+            raise ValueError(f"worker '{name}': stdin must be one of {sorted(VALID_STDIN)}, got '{worker.stdin}'")
 
     intercept = [InterceptRule(**r) for r in (raw.get("intercept") or [])]
 
