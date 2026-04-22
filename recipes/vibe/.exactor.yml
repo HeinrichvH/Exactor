@@ -39,6 +39,8 @@ workers:
 
 intercept:
   - tool: WebSearch
+    query_field: query        # Claude Code's WebSearch payload shape
     route_to: research
   - tool: WebFetch
+    query_field: url          # fetch takes {url, prompt}; url is enough context for vibe
     route_to: research

@@ -14,12 +14,6 @@ cache:
   path: .exactor/cache.db
   default_ttl_hours: 24
 
-# Memory backend — swappable. file is the default (no extra deps).
-# Options: file | sqlite (coming soon) | custom
-memory:
-  backend: file
-  path: .exactor/session
-
 # Workers are plain shell commands. {query} is replaced with the intercepted input.
 # Bring your own — these are examples. Replace with whatever lives in your PATH.
 workers:
@@ -34,18 +28,25 @@ workers:
     timeout: 60
 
 # Intercept rules — matched top to bottom, first match wins.
+#
+# query_field names the tool_input key that holds the relevant string (Exactor
+# doesn't hardcode any tool's schema). It's also the subject `match:` tests
+# against, so regex + query stay consistent. Omit it to pass str(tool_input).
 intercept:
   # Route web searches to your researcher
   - tool: WebSearch
+    query_field: query
     route_to: research
 
   # Route WebFetch to your researcher
   - tool: WebFetch
+    query_field: url
     route_to: research
 
   # Route Bash grep/find/rg to your explorer
   # unless: the command targets a single known file (cat /absolute/path)
   - tool: Bash
+    query_field: command
     match: "^(grep|rg|find)\\b"
     route_to: explore
     unless: single_file_absolute_path

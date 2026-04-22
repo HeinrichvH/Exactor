@@ -36,7 +36,10 @@ class InterceptRule:
     tool: str
     route_to: Optional[str] = None
     action: Optional[str] = None       # "summarize"
-    match: Optional[str] = None        # regex on tool input
+    query_field: Optional[str] = None  # tool_input key to extract (e.g. "query" for WebSearch).
+                                       # Falls back to str(tool_input). Also used as the subject
+                                       # for `match:` regex, so both stay consistent.
+    match: Optional[str] = None        # regex on the query_field value (or str(tool_input))
     unless: Optional[str] = None       # heuristic: "single_file_absolute_path"
     output_lines_gt: Optional[int] = None
 

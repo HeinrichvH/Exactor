@@ -26,32 +26,32 @@ def _is_single_file_absolute_path(command: str) -> bool:
     return bool(_SINGLE_FILE_RE.match(command.strip()))
 
 
+def extract_query(rule: InterceptRule, tool_input: dict) -> str:
+    """Pull the relevant string out of tool_input per the rule.
+
+    When the rule declares query_field, extract that key; otherwise stringify
+    the whole payload. This is how the router stays agnostic to any particular
+    tool's input schema — the recipe names the field, Exactor doesn't hardcode
+    Claude Code's tool shapes.
+    """
+    if rule.query_field:
+        return str(tool_input.get(rule.query_field, ""))
+    return str(tool_input)
+
+
 def _apply_unless(rule: InterceptRule, tool_input: dict) -> bool:
     """Return True if the unless-clause fires (i.e. rule should be skipped)."""
     if rule.unless == "single_file_absolute_path":
-        command = tool_input.get("command", "")
-        return _is_single_file_absolute_path(command)
+        return _is_single_file_absolute_path(extract_query(rule, tool_input))
     return False
-
-
-def extract_query(rule: InterceptRule, tool_input: dict) -> str:
-    if rule.tool == "Bash":
-        return tool_input.get("command", "")
-    if rule.tool in ("WebSearch",):
-        return tool_input.get("query", "")
-    if rule.tool in ("WebFetch",):
-        return tool_input.get("url", "")
-    return str(tool_input)
 
 
 def match_rule(tool_name: str, tool_input: dict, config: Config) -> Optional[InterceptRule]:
     for rule in config.intercept:
         if rule.tool != tool_name:
             continue
-        if rule.match:
-            subject = tool_input.get("command", "") if tool_name == "Bash" else str(tool_input)
-            if not re.search(rule.match, subject):
-                continue
+        if rule.match and not re.search(rule.match, extract_query(rule, tool_input)):
+            continue
         if _apply_unless(rule, tool_input):
             continue
         return rule

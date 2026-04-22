@@ -83,6 +83,7 @@ workers:
     command: "echo hello-{query}"
 intercept:
   - tool: WebSearch
+    query_field: query
     route_to: echo
 """
     code, out, err = _run_hook(
