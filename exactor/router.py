@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -54,13 +55,14 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> str:
         raise ValueError(f"Worker '{worker_name}' not defined in config")
 
     query = _extract_query(rule, tool_input)
-    command = worker.command.replace("{query}", query)
+    command = worker.command.replace("{query}", shlex.quote(query))
 
     result = subprocess.run(
         command,
         shell=True,
         capture_output=True,
         text=True,
+        stdin=subprocess.DEVNULL,
     )
     output = result.stdout.strip()
     if result.returncode != 0:

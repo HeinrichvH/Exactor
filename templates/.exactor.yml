@@ -10,11 +10,11 @@ memory:
 # Bring your own — these are examples. Replace with whatever lives in your PATH.
 workers:
   research:
-    command: "echo '[research] {query}'"
-    description: "Web research — replace with your researcher tool"
+    command: "research {query}"
+    description: "Web research — requires a `research` tool in your PATH"
   explore:
-    command: "echo '[explore] {query}'"
-    description: "Codebase exploration — replace with your explorer tool"
+    command: "explore {query}"
+    description: "Codebase exploration — requires an `explore` tool in your PATH"
 
 # Intercept rules — matched top to bottom, first match wins.
 intercept:
