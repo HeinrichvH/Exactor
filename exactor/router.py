@@ -74,8 +74,11 @@ def match_rule(tool_name: str, tool_input: dict, config: Config) -> Optional[Int
     return None
 
 
-def _build_env(worker: Worker, config: Config) -> Optional[dict]:
+def _build_env(worker: Worker, config: Config) -> dict:
     """Overlay worker.env onto the host environment.
+
+    Always returns a dict, which is both the subprocess env AND the
+    expansion context used by `_build_invocation` for ${VAR} in command/args.
 
     Values are expanded at hook-invocation time via string.Template.safe_substitute,
     which resolves ${VAR} against the host env plus two recipe-locals:
@@ -91,23 +94,38 @@ def _build_env(worker: Worker, config: Config) -> Optional[dict]:
     if config.source is not None:
         env["EXACTOR_CONFIG_DIR"] = str(config.source.parent)
         env["EXACTOR_CONFIG_FILE"] = str(config.source)
-    if not worker.env:
-        return env if config.source is not None else None
-    for k, v in worker.env.items():
-        env[k] = Template(str(v)).safe_substitute(env)
+    if worker.env:
+        for k, v in worker.env.items():
+            env[k] = Template(str(v)).safe_substitute(env)
     return env
 
 
-def _build_invocation(worker: Worker, query: str) -> tuple[list[str] | str, bool]:
+def _build_invocation(worker: Worker, query: str, env: dict) -> tuple[list[str] | str, bool]:
     """Return (cmd, use_shell).
 
     Structured args form (preferred): ["vibe", "-p", "{query}", ...] → shell=False.
     String form (legacy): "research {query}" → shell=True with shlex-quoted query.
+
+    Both `command` and each entry in `args` are expanded against `env` via
+    string.Template.safe_substitute before {query} substitution. This makes
+    args symmetric with worker.env — a recipe can write
+      args: ["${EXACTOR_CONFIG_DIR}/explore.py", "{query}"]
+    and have it resolve without hardcoded absolute paths.
+
+    Expansion happens BEFORE {query} substitution, so a query containing
+    literal "$VAR" (untrusted input from the model) is passed through verbatim
+    rather than expanded against host env. Important: env expansion on the
+    query would be an information-leak surface.
     """
+    def expand(s: str) -> str:
+        return Template(s).safe_substitute(env)
+
     if worker.args is not None:
-        argv = [worker.command] + [str(a).replace("{query}", query) for a in worker.args]
+        argv = [expand(worker.command)] + [
+            expand(str(a)).replace("{query}", query) for a in worker.args
+        ]
         return argv, False
-    return worker.command.replace("{query}", shlex.quote(query)), True
+    return expand(worker.command).replace("{query}", shlex.quote(query)), True
 
 
 def _stdin_spec(mode: str):
@@ -123,7 +141,8 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
         raise ValueError(f"Worker '{worker_name}' not defined in config")
 
     query = extract_query(rule, tool_input)
-    cmd, use_shell = _build_invocation(worker, query)
+    env = _build_env(worker, config)
+    cmd, use_shell = _build_invocation(worker, query, env)
 
     try:
         result = subprocess.run(
@@ -133,7 +152,7 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
             text=True,
             stdin=_stdin_spec(worker.stdin),
             timeout=worker.timeout,
-            env=_build_env(worker, config),
+            env=env,
             cwd=worker.cwd,
         )
     except subprocess.TimeoutExpired:
