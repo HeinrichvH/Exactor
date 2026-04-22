@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "exactor"
+version = "0.1.0"
+description = "Enforce the discipline your AGENTS.md only suggests."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+exactor = "exactor.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["exactor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

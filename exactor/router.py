@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import re
+import subprocess
+from pathlib import Path
+from typing import Optional
+
+from .config import Config, InterceptRule, Worker
+
+
+_SINGLE_FILE_RE = re.compile(r"^(cat|head|tail|less)\s+(/[^\s;|&]+)$")
+
+
+def _is_single_file_absolute_path(command: str) -> bool:
+    return bool(_SINGLE_FILE_RE.match(command.strip()))
+
+
+def _apply_unless(rule: InterceptRule, tool_input: dict) -> bool:
+    """Return True if the unless-clause fires (i.e. rule should be skipped)."""
+    if rule.unless == "single_file_absolute_path":
+        command = tool_input.get("command", "")
+        return _is_single_file_absolute_path(command)
+    return False
+
+
+def _extract_query(rule: InterceptRule, tool_input: dict) -> str:
+    if rule.tool == "Bash":
+        return tool_input.get("command", "")
+    if rule.tool in ("WebSearch",):
+        return tool_input.get("query", "")
+    if rule.tool in ("WebFetch",):
+        return tool_input.get("url", "")
+    return str(tool_input)
+
+
+def match_rule(tool_name: str, tool_input: dict, config: Config) -> Optional[InterceptRule]:
+    for rule in config.intercept:
+        if rule.tool != tool_name:
+            continue
+        if rule.match:
+            subject = tool_input.get("command", "") if tool_name == "Bash" else str(tool_input)
+            if not re.search(rule.match, subject):
+                continue
+        if _apply_unless(rule, tool_input):
+            continue
+        return rule
+    return None
+
+
+def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> str:
+    worker_name = rule.route_to
+    worker: Optional[Worker] = config.workers.get(worker_name)
+    if not worker:
+        raise ValueError(f"Worker '{worker_name}' not defined in config")
+
+    query = _extract_query(rule, tool_input)
+    command = worker.command.replace("{query}", query)
+
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+    output = result.stdout.strip()
+    if result.returncode != 0:
+        output = f"[exactor] worker '{worker_name}' failed:\n{result.stderr.strip()}"
+    return output
