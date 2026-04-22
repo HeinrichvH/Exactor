@@ -8,7 +8,11 @@ Contributions welcome. Keep it focused — Exactor does one thing.
 git clone https://github.com/your-username/exactor
 cd exactor
 pip install -e ".[dev]"
+pre-commit install
 ```
+
+`pre-commit install` wires up the local hooks (gitleaks secret scan, large-file
+check, YAML/TOML validation, whitespace). CI runs the same set on every PR.
 
 ## Before opening a PR
 
