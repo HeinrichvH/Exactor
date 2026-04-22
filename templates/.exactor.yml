@@ -12,9 +12,11 @@ workers:
   research:
     command: "research {query}"
     description: "Web research — requires a `research` tool in your PATH"
+    timeout: 240               # inner timeout in seconds; keep < outer Claude Code hook timeout
   explore:
     command: "explore {query}"
     description: "Codebase exploration — requires an `explore` tool in your PATH"
+    timeout: 60
 
 # Intercept rules — matched top to bottom, first match wins.
 intercept:

@@ -57,13 +57,18 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> str:
     query = _extract_query(rule, tool_input)
     command = worker.command.replace("{query}", shlex.quote(query))
 
-    result = subprocess.run(
-        command,
-        shell=True,
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=worker.timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return f"[exactor] worker '{worker_name}' timed out after {worker.timeout}s"
+
     output = result.stdout.strip()
     if result.returncode != 0:
         output = f"[exactor] worker '{worker_name}' failed:\n{result.stderr.strip()}"

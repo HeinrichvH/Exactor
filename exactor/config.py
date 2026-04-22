@@ -11,6 +11,7 @@ import yaml
 class Worker:
     command: str
     description: str = ""
+    timeout: Optional[int] = None      # seconds; None = no inner timeout
 
 
 @dataclass

@@ -8,6 +8,7 @@ workers:
   research:
     command: "research {query}"
     description: "Web research via Mistral Vibe"
+    timeout: 240               # inner timeout; set Claude Code hook timeout higher (e.g. 300)
 
 intercept:
   - tool: WebSearch
