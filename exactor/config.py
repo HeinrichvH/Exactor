@@ -55,8 +55,17 @@ class InterceptRule:
 
 @dataclass
 class CacheConfig:
-    path: str = ".exactor/cache.db"
+    # None = resolve to paths.default_cache_path() at use time (XDG cache dir).
+    # Set explicitly when you want a project-local DB instead.
+    path: Optional[str] = None
     default_ttl_hours: int = 24
+
+
+@dataclass
+class LoggingConfig:
+    level: str = "INFO"                # TRACE/DEBUG/INFO/WARNING/ERROR/CRITICAL
+    # None = resolve to paths.default_log_path() at use time (XDG state dir).
+    path: Optional[str] = None
 
 
 @dataclass
@@ -64,6 +73,7 @@ class Config:
     workers: dict[str, Worker]
     intercept: list[InterceptRule]
     cache: CacheConfig = field(default_factory=CacheConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
     guards: dict = field(default_factory=dict)
     mode: str = MODE_STRICT            # default failure policy for all workers
     source: Optional[Path] = None      # path to the loaded .exactor.yml (None if constructed in-memory)
@@ -95,6 +105,9 @@ def load_config(path: Path) -> Config:
     cache_raw = raw.get("cache") or {}
     cache = CacheConfig(**cache_raw) if cache_raw else CacheConfig()
 
+    logging_raw = raw.get("logging") or {}
+    logging_cfg = LoggingConfig(**logging_raw) if logging_raw else LoggingConfig()
+
     mode = raw.get("mode", MODE_STRICT)
     if mode not in VALID_MODES:
         raise ValueError(f"mode must be one of {sorted(VALID_MODES)}, got '{mode}'")
@@ -103,6 +116,7 @@ def load_config(path: Path) -> Config:
         workers=workers,
         intercept=intercept,
         cache=cache,
+        logging=logging_cfg,
         guards=raw.get("guards") or {},
         mode=mode,
         source=path,

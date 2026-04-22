@@ -10,9 +10,17 @@ mode: strict
 
 # Working-memory cache (SQLite-backed, stdlib only).
 # Opt-in per worker via `cache: true`. TTL configurable per worker.
+# `path` defaults to $XDG_CACHE_HOME/exactor/cache.db (i.e. ~/.cache/exactor/cache.db).
+# Override here for a project-local DB.
 cache:
-  path: .exactor/cache.db
   default_ttl_hours: 24
+
+# JSON-lines log of every hook fire, route decision, and worker outcome.
+# Default: $XDG_STATE_HOME/exactor/exactor.log (i.e. ~/.local/state/exactor/exactor.log).
+# Rotated at 5 MiB × 3 files. Inspect with `exactor log tail` or `jq`.
+# `EXACTOR_LOG_LEVEL=debug` in env mirrors to stderr for `claude --debug`.
+logging:
+  level: INFO
 
 # Workers are plain shell commands. {query} is replaced with the intercepted input.
 # Bring your own — these are examples. Replace with whatever lives in your PATH.

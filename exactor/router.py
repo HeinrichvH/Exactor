@@ -10,6 +10,7 @@ from string import Template
 from typing import Optional
 
 from .config import STDIN_DEVNULL, STDIN_INHERIT, Config, InterceptRule, Worker
+from .log import get_logger
 
 
 @dataclass
@@ -143,6 +144,12 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
     query = extract_query(rule, tool_input)
     env = _build_env(worker, config)
     cmd, use_shell = _build_invocation(worker, query, env)
+
+    log = get_logger()
+    log.debug(
+        "worker_start",
+        extra={"worker": worker_name, "shell": use_shell, "timeout": worker.timeout},
+    )
 
     try:
         result = subprocess.run(

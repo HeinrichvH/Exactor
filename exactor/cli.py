@@ -55,13 +55,45 @@ def cmd_hook(args: argparse.Namespace) -> int:
 def _open_cache() -> "object | None":
     from .cache import Cache
     from .config import find_config, load_config
+    from .paths import default_cache_path
     path = find_config()
     if not path:
         print("[exactor] no .exactor.yml found", file=sys.stderr)
         return None
     config = load_config(path)
-    cache_path = (path.parent / config.cache.path) if not Path(config.cache.path).is_absolute() else Path(config.cache.path)
+    if not config.cache.path:
+        cache_path = default_cache_path()
+    elif Path(config.cache.path).is_absolute():
+        cache_path = Path(config.cache.path)
+    else:
+        cache_path = path.parent / config.cache.path
     return Cache(cache_path)
+
+
+def cmd_log(args: argparse.Namespace) -> int:
+    from .log import _resolve_path  # type: ignore[attr-defined]
+    from .config import find_config, load_config
+
+    override = None
+    cfg_path = find_config()
+    if cfg_path:
+        try:
+            override = load_config(cfg_path).logging.path
+        except Exception:
+            override = None
+
+    path = _resolve_path(override)
+    if args.log_action in (None, "path"):
+        print(path)
+        return 0
+    if args.log_action == "tail":
+        if not path.exists():
+            print(f"[exactor] no log file yet at {path}", file=sys.stderr)
+            return 1
+        import subprocess
+        return subprocess.call(["tail", "-f", str(path)])
+    print(f"[exactor] unknown log action: {args.log_action}", file=sys.stderr)
+    return 1
 
 
 def cmd_cache(args: argparse.Namespace) -> int:
@@ -121,6 +153,11 @@ def main() -> None:
     # default avoids silent argparse failure under a catch-all matcher.
     p_hook.add_argument("event", choices=["pre", "post"], nargs="?", default="pre")
 
+    p_log = sub.add_parser("log", help="Show or tail the Exactor log file")
+    log_sub = p_log.add_subparsers(dest="log_action")
+    log_sub.add_parser("path", help="Print the resolved log file path")
+    log_sub.add_parser("tail", help="tail -f the log file")
+
     p_cache = sub.add_parser("cache", help="Inspect or clear the working-memory cache")
     cache_sub = p_cache.add_subparsers(dest="cache_action")
     cache_sub.add_parser("list", help="Show cache entries")
@@ -141,6 +178,8 @@ def main() -> None:
         sys.exit(cmd_hook(args))
     elif args.command == "cache":
         sys.exit(cmd_cache(args))
+    elif args.command == "log":
+        sys.exit(cmd_log(args))
     else:
         parser.print_help()
         sys.exit(0)

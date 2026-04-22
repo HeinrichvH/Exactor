@@ -54,6 +54,22 @@ A worker is any CLI that:
 Pass flags via `args:`, secrets via `env:`. See [`recipes/vibe/.exactor.yml`](recipes/vibe/.exactor.yml)
 for a complete example.
 
+## Logging
+
+Every hook fire, routing decision, and worker outcome is written as one
+JSON object per line to `$XDG_STATE_HOME/exactor/exactor.log` (default
+`~/.local/state/exactor/exactor.log`). Rotated at 5 MiB × 3 files.
+
+```bash
+exactor log path      # print the resolved log file path
+exactor log tail      # tail -f
+jq 'select(.worker=="explore")' ~/.local/state/exactor/exactor.log
+```
+
+Set `EXACTOR_LOG_LEVEL=debug` to also mirror to stderr (visible under
+`claude --debug`). Override the path per-project via `logging.path` in
+`.exactor.yml`, or globally via `EXACTOR_LOG_FILE`.
+
 ## Status
 
 Early development. Core hook dispatcher and SQLite working-memory cache
