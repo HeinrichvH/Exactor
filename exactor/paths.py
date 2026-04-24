@@ -34,3 +34,7 @@ def default_cache_path() -> Path:
 
 def default_log_path() -> Path:
     return state_dir() / "exactor.log"
+
+
+def data_dir() -> Path:
+    return _xdg("XDG_DATA_HOME", ".local/share") / "exactor"

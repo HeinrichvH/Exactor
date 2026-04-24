@@ -68,12 +68,54 @@ class LoggingConfig:
     path: Optional[str] = None
 
 
+# Memory adapter — recall-first subsystem.
+#
+# Separate from intercept rules because the output semantics differ: an
+# intercept rule REPLACES a tool result; a memory recall AUGMENTS the prompt
+# via UserPromptSubmit's additionalContext. Keeping it a distinct block
+# avoids overloading intercept rules with a "what do I do with the output"
+# field before we've seen enough lifecycle integrations to abstract cleanly.
+@dataclass
+class MemoryRecallConfig:
+    # Hook event that triggers recall. Only UserPromptSubmit is supported
+    # today; store-side events (Stop/PreCompact/SessionEnd) will land later.
+    # NB: the field is `event:` not `on:` — YAML 1.1 parses bare `on` as
+    # the boolean True, which silently corrupts the key.
+    event: str = "UserPromptSubmit"
+    # Inline worker spec — a memory backend is always single-purpose for a
+    # given project, so inlining beats the named-worker-reference dance.
+    worker: Optional[Worker] = None
+
+
+@dataclass
+class MemoryStoreConfig:
+    # Multiple events fire the same worker. The event names here must match
+    # what Claude Code's settings.json wires to `exactor hook <event>` — we
+    # deliberately do NOT allowlist, because the source of truth for "which
+    # hooks exist" is Claude Code, not exactor. Users can wire SubagentStop
+    # or any future event without waiting on an exactor release.
+    events: list[str] = field(default_factory=list)
+    worker: Optional[Worker] = None
+    # Optional adapter called after the store worker succeeds. The store
+    # worker's stdout is piped to the adapter's stdin as JSON. Users can
+    # plug in any backend (hippocampus, Notion, custom DB) without coupling
+    # to exactor's internals.
+    adapter: Optional[Worker] = None
+
+
+@dataclass
+class MemoryConfig:
+    recall: Optional[MemoryRecallConfig] = None
+    store: Optional[MemoryStoreConfig] = None
+
+
 @dataclass
 class Config:
     workers: dict[str, Worker]
     intercept: list[InterceptRule]
     cache: CacheConfig = field(default_factory=CacheConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
     guards: dict = field(default_factory=dict)
     mode: str = MODE_STRICT            # default failure policy for all workers
     source: Optional[Path] = None      # path to the loaded .exactor.yml (None if constructed in-memory)
@@ -112,15 +154,69 @@ def load_config(path: Path) -> Config:
     if mode not in VALID_MODES:
         raise ValueError(f"mode must be one of {sorted(VALID_MODES)}, got '{mode}'")
 
+    memory_raw = raw.get("memory") or {}
+    memory = _parse_memory(memory_raw)
+
     return Config(
         workers=workers,
         intercept=intercept,
         cache=cache,
         logging=logging_cfg,
+        memory=memory,
         guards=raw.get("guards") or {},
         mode=mode,
         source=path,
     )
+
+
+def _parse_memory_worker(raw: dict, path: str) -> Worker:
+    worker_raw = raw.get("worker")
+    if not worker_raw:
+        raise ValueError(f"{path}: `worker` is required")
+    worker = Worker(**worker_raw) if isinstance(worker_raw, dict) else Worker(command=worker_raw)
+    if worker.mode and worker.mode not in VALID_MODES:
+        raise ValueError(f"{path}.worker: mode must be one of {sorted(VALID_MODES)}, got '{worker.mode}'")
+    if worker.stdin not in VALID_STDIN:
+        raise ValueError(f"{path}.worker: stdin must be one of {sorted(VALID_STDIN)}, got '{worker.stdin}'")
+    return worker
+
+
+def _parse_memory(raw: dict) -> MemoryConfig:
+    recall: Optional[MemoryRecallConfig] = None
+    store: Optional[MemoryStoreConfig] = None
+
+    if "recall" in raw:
+        recall_raw = raw.get("recall") or {}
+        worker = _parse_memory_worker(recall_raw, "memory.recall")
+        event = recall_raw.get("event", "UserPromptSubmit")
+        if not isinstance(event, str) or not event:
+            raise ValueError("memory.recall.event: must be a non-empty string")
+        recall = MemoryRecallConfig(event=event, worker=worker)
+
+    if "store" in raw:
+        store_raw = raw.get("store") or {}
+        worker = _parse_memory_worker(store_raw, "memory.store")
+        events = store_raw.get("events", [])
+        if not isinstance(events, list) or not events:
+            raise ValueError("memory.store.events: must be a non-empty list")
+        for ev in events:
+            if not isinstance(ev, str) or not ev:
+                raise ValueError(f"memory.store.events: entries must be non-empty strings, got {ev!r}")
+        adapter: Optional[Worker] = None
+        if "adapter" in store_raw:
+            adapter_raw = store_raw["adapter"]
+            adapter = Worker(**adapter_raw) if isinstance(adapter_raw, dict) else Worker(command=adapter_raw)
+            if adapter.mode and adapter.mode not in VALID_MODES:
+                raise ValueError(
+                    f"memory.store.adapter: mode must be one of {sorted(VALID_MODES)}, got '{adapter.mode}'"
+                )
+            if adapter.stdin not in VALID_STDIN:
+                raise ValueError(
+                    f"memory.store.adapter: stdin must be one of {sorted(VALID_STDIN)}, got '{adapter.stdin}'"
+                )
+        store = MemoryStoreConfig(events=list(events), worker=worker, adapter=adapter)
+
+    return MemoryConfig(recall=recall, store=store)
 
 
 def find_config(start: Optional[Path] = None) -> Optional[Path]:
