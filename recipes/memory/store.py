@@ -6,7 +6,7 @@ Invoked by the memory.store hook on PreCompact/SessionEnd. Reads the Claude
 Code hook payload from stdin, runs a Goose recipe (Mistral) to extract
 memories from the conversation transcript, appends them to a JSONL log, and
 writes the extracted memories JSON to stdout — where Exactor pipes it to the
-configured adapter (hippocampus, Notion, etc.).
+configured adapter (your memory backend of choice).
 
 Fail-open throughout: any single step failing is logged to stderr and the
 script exits 0 so Exactor doesn't treat it as a hook error.

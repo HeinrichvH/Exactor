@@ -98,7 +98,7 @@ class MemoryStoreConfig:
     worker: Optional[Worker] = None
     # Optional adapter called after the store worker succeeds. The store
     # worker's stdout is piped to the adapter's stdin as JSON. Users can
-    # plug in any backend (hippocampus, Notion, custom DB) without coupling
+    # plug in any backend (Mem0, Notion, custom DB) without coupling
     # to exactor's internals.
     adapter: Optional[Worker] = None
 

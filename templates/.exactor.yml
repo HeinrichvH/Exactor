@@ -68,7 +68,7 @@ guards:
   warn_on_bypass: true
 
 # Memory adapter — optional. Exactor doesn't ship a backend; you bring one
-# (hippocampus, Mem0, a flat JSON file, whatever) and wire it as a worker.
+# (Mem0, a flat JSON file, your own service, whatever) and wire it as a worker.
 #
 # Recall: runs on UserPromptSubmit. Worker stdout is injected as
 #   additionalContext into the model's conversation. {query} = user prompt.

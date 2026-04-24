@@ -57,8 +57,8 @@ for a complete example.
 ## Memory
 
 Exactor can recall memory into every user prompt and store memory on
-lifecycle events. It doesn't ship a backend — you bring one (hippocampus,
-Mem0, a flat JSON file, whatever) as a worker.
+lifecycle events. It doesn't ship a backend — you bring one (Mem0, a flat
+JSON file, your own service, whatever) as a worker.
 
 ```yaml
 # .exactor.yml

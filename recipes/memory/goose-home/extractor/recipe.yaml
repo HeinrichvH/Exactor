@@ -86,7 +86,7 @@ instructions: |
     in our setup — use W instead."
   - Keep content under 3 sentences. If it needs more, split into two memories.
   - Tags must be lowercase, single words or hyphenated terms (e.g. "grpc",
-    "auth", "hippocampus", "nuxt-ssr").
+    "auth", "ssr", "migration").
 
   ## Output format
 
@@ -142,4 +142,4 @@ response:
                 pattern: "^[a-z0-9][a-z0-9-]*$"
               description: >-
                 Lowercase topic tags for retrieval. 1–6 tags. Examples:
-                grpc, auth, nuxt-ssr, hippocampus, kestrel, longhorn.
+                grpc, auth, ssr, migration, caching, deployment.
