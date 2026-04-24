@@ -162,13 +162,24 @@ def _stdin_spec(mode: str):
     return subprocess.DEVNULL
 
 
-def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerResult:
-    worker_name = rule.route_to or ""
-    worker: Optional[Worker] = config.workers.get(worker_name)
-    if not worker:
-        raise ValueError(f"Worker '{worker_name}' not defined in config")
+def run_worker_with_query(
+    worker: Worker,
+    worker_name: str,
+    query: str,
+    config: Config,
+    stdin_bytes: Optional[bytes] = None,
+) -> WorkerResult:
+    """Run a worker against a raw query string, bypassing rule/intercept machinery.
 
-    query = extract_query(rule, tool_input)
+    Used by the memory adapter: recall workers run against the user's prompt,
+    not a tool_input dict. Shares all the subprocess plumbing (env expansion,
+    args vs shell, timeout, stdin mode, cwd) with intercept-rule workers.
+
+    `stdin_bytes` — when supplied, piped to the worker as stdin regardless of
+    the worker's configured stdin mode. Store-side memory hooks use this to
+    hand the full Claude Code payload through so the backend can inspect
+    transcript_path, session_id, etc.
+    """
     env = _build_env(worker, config)
     cmd, use_shell = _build_invocation(worker, query, env)
 
@@ -178,17 +189,22 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
         extra={"worker": worker_name, "shell": use_shell, "timeout": worker.timeout},
     )
 
+    # subprocess.run: `input` and `stdin` are mutually exclusive.
+    run_kwargs: dict = {
+        "shell": use_shell,
+        "capture_output": True,
+        "text": True,
+        "timeout": worker.timeout,
+        "env": env,
+        "cwd": worker.cwd,
+    }
+    if stdin_bytes is not None:
+        run_kwargs["input"] = stdin_bytes.decode("utf-8", errors="replace")
+    else:
+        run_kwargs["stdin"] = _stdin_spec(worker.stdin)
+
     try:
-        result = subprocess.run(
-            cmd,
-            shell=use_shell,
-            capture_output=True,
-            text=True,
-            stdin=_stdin_spec(worker.stdin),
-            timeout=worker.timeout,
-            env=env,
-            cwd=worker.cwd,
-        )
+        result = subprocess.run(cmd, **run_kwargs)
     except subprocess.TimeoutExpired:
         return WorkerResult(
             output=f"[exactor] worker '{worker_name}' timed out after {worker.timeout}s",
@@ -214,6 +230,16 @@ def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerR
         success=True,
         worker_name=worker_name,
     )
+
+
+def run_worker(rule: InterceptRule, tool_input: dict, config: Config) -> WorkerResult:
+    worker_name = rule.route_to or ""
+    worker: Optional[Worker] = config.workers.get(worker_name)
+    if not worker:
+        raise ValueError(f"Worker '{worker_name}' not defined in config")
+
+    query = extract_query(rule, tool_input)
+    return run_worker_with_query(worker, worker_name, query, config)
 
 
 def effective_mode(worker: Worker, config: Config) -> str:

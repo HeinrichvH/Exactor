@@ -66,3 +66,26 @@ intercept:
 guards:
   max_raw_output_lines: 80
   warn_on_bypass: true
+
+# Memory adapter — optional. Exactor doesn't ship a backend; you bring one
+# (hippocampus, Mem0, a flat JSON file, whatever) and wire it as a worker.
+#
+# Recall: runs on UserPromptSubmit. Worker stdout is injected as
+#   additionalContext into the model's conversation. {query} = user prompt.
+# Store: runs on the events you list here — Claude Code is the source of
+#   truth for which events exist, exactor does not allowlist. The full hook
+#   payload is piped to the worker on stdin verbatim; the worker reads
+#   transcript_path / hook_event_name / session_id and decides what to
+#   persist. Fire-and-forget — worker stdout is ignored.
+#
+# memory:
+#   recall:
+#     event: UserPromptSubmit
+#     worker:
+#       command: "your-memory-recall {query}"
+#       timeout: 10                  # keep short — runs on every prompt
+#   store:
+#     events: [Stop, PreCompact, SessionEnd]
+#     worker:
+#       command: "your-memory-store"
+#       timeout: 30                  # PreCompact rescue can be slower

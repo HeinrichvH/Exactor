@@ -54,6 +54,60 @@ A worker is any CLI that:
 Pass flags via `args:`, secrets via `env:`. See [`recipes/vibe/.exactor.yml`](recipes/vibe/.exactor.yml)
 for a complete example.
 
+## Memory
+
+Exactor can recall memory into every user prompt and store memory on
+lifecycle events. It doesn't ship a backend — you bring one (hippocampus,
+Mem0, a flat JSON file, whatever) as a worker.
+
+```yaml
+# .exactor.yml
+memory:
+  recall:
+    event: UserPromptSubmit
+    worker:
+      command: "your-memory-recall {query}"
+      timeout: 10
+  store:
+    events: [Stop, PreCompact, SessionEnd]
+    worker:
+      command: "your-memory-store"
+      timeout: 30
+```
+
+**Recall** — runs on `UserPromptSubmit`. The worker receives the user's
+prompt as `{query}`, writes relevant context to stdout, exits 0. Its output
+is forwarded to Claude as `additionalContext` alongside the user's message.
+Clamped to 10 KiB (Claude Code's limit).
+
+**Store** — runs on the events you list. The full Claude Code hook payload
+is piped to the worker on stdin verbatim; the worker reads
+`transcript_path`, `hook_event_name`, `session_id` from that JSON and
+decides what to persist. Fire-and-forget — worker stdout is ignored.
+
+Exactor does not allowlist event names — Claude Code is the source of
+truth. Wire `SubagentStop` or any future hook the same way.
+
+Everything is fail-open: a broken memory backend logs `recall_failed` or
+`store_failed` and lets the session continue. The recommended worker shape
+is a thin CLI over a long-running backend so the per-invocation fork cost
+stays invisible.
+
+Wire the hooks in your Claude Code `settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse":       [{"command": "exactor hook pre"}],
+    "PostToolUse":      [{"command": "exactor hook post"}],
+    "UserPromptSubmit": [{"command": "exactor hook user-prompt-submit"}],
+    "Stop":             [{"command": "exactor hook stop"}],
+    "PreCompact":       [{"command": "exactor hook pre-compact"}],
+    "SessionEnd":       [{"command": "exactor hook session-end"}]
+  }
+}
+```
+
 ## Logging
 
 Every hook fire, routing decision, and worker outcome is written as one

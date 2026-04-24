@@ -21,8 +21,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"[exactor] add hooks to your .claude/settings.json:")
     print()
     print('  "hooks": {')
-    print('    "PreToolUse": [{"command": "exactor hook pre"}],')
-    print('    "PostToolUse": [{"command": "exactor hook post"}]')
+    print('    "PreToolUse":        [{"command": "exactor hook pre"}],')
+    print('    "PostToolUse":       [{"command": "exactor hook post"}],')
+    print('    "UserPromptSubmit":  [{"command": "exactor hook user-prompt-submit"}],')
+    print('    "Stop":              [{"command": "exactor hook stop"}],')
+    print('    "PreCompact":        [{"command": "exactor hook pre-compact"}],')
+    print('    "SessionEnd":        [{"command": "exactor hook session-end"}]')
     print('  }')
     return 0
 
@@ -42,14 +46,26 @@ def cmd_check(args: argparse.Namespace) -> int:
         return 1
 
 
+def _kebab_to_pascal(s: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in s.split("-"))
+
+
 def cmd_hook(args: argparse.Namespace) -> int:
-    from .hooks import pre_tool_use, post_tool_use
-    if args.event == "pre":
-        return pre_tool_use()
-    if args.event == "post":
-        return post_tool_use()
-    print(f"[exactor] unknown hook event: {args.event}")
-    return 1
+    from .hooks import pre_tool_use, post_tool_use, user_prompt_submit, _store_event
+    # Named handlers cover events whose output semantics are distinctive
+    # (PreToolUse denies, PostToolUse can trim, UserPromptSubmit injects
+    # additionalContext). Anything else is routed to the store dispatcher
+    # with the kebab-case arg normalized to PascalCase to match the event
+    # names Claude Code uses in its hook payloads.
+    named = {
+        "pre": pre_tool_use,
+        "post": post_tool_use,
+        "user-prompt-submit": user_prompt_submit,
+    }
+    fn = named.get(args.event)
+    if fn is not None:
+        return fn()
+    return _store_event(_kebab_to_pascal(args.event), None)
 
 
 def _open_cache() -> "object | None":
@@ -151,7 +167,12 @@ def main() -> None:
     # `event` defaults to "pre" because that's ~95% of hook installs and
     # older docs recommended the bare `exactor hook` form. Keeping the
     # default avoids silent argparse failure under a catch-all matcher.
-    p_hook.add_argument("event", choices=["pre", "post"], nargs="?", default="pre")
+    # Event is a free-form string. `pre` / `post` / `user-prompt-submit` are
+    # named handlers; everything else is treated as a store-side event and
+    # the kebab-case arg is mapped to PascalCase (`stop` → `Stop`,
+    # `pre-compact` → `PreCompact`, `subagent-stop` → `SubagentStop`).
+    # The source of truth for which events exist is Claude Code, not exactor.
+    p_hook.add_argument("event", nargs="?", default="pre")
 
     p_log = sub.add_parser("log", help="Show or tail the Exactor log file")
     log_sub = p_log.add_subparsers(dest="log_action")
